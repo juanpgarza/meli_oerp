@@ -26,7 +26,7 @@
         'views/warning_view.xml',
         'views/questions_view.xml',
         'views/orders_view.xml',
-        'views/atrributes_view.xml',
+        # 'views/atrributes_view.xml',
         'data/cron_jobs.xml',
         'data/error_template_data.xml',
         'data/parameters_data.xml',
