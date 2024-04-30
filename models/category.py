@@ -55,14 +55,14 @@ class mercadolibre_category_import(models.TransientModel):
     def _get_default_meli_category_id(self, context=None):
         context = context or self.env.context
         company = self.env.user.company_id
-        _logger.info("_get_default_meli_category_id")
-        _logger.info(context)
+        #_logger.info("_get_default_meli_category_id")
+        #_logger.info(context)
 
     def _get_default_meli_recursive_import(self, context=None):
         context = context or self.env.context
         company = self.env.user.company_id
-        _logger.info("_get_default_meli_recursive_import")
-        _logger.info(context)
+        #_logger.info("_get_default_meli_recursive_import")
+        #_logger.info(context)
 
     meli_category_id = fields.Char(string="MercadoLibre Category ID",help="MercadoLibre Category ID (ML????????)",default=_get_default_meli_category_id)
     meli_recursive_import = fields.Boolean(string="Recursive Import",help="Importar todas las subramas",default=_get_default_meli_recursive_import)
@@ -80,15 +80,15 @@ class mercadolibre_category_import(models.TransientModel):
         if meli and meli.need_login():
             return meli.redirect_login()
 
-        _logger.info("Meli Category Import Wizard")
-        _logger.info(context)
+        #_logger.info("Meli Category Import Wizard")
+        #_logger.info(context)
         if ( self.meli_category_id):
-            _logger.info("Import single category: "+str(self.meli_category_id))
+            #_logger.info("Import single category: "+str(self.meli_category_id))
             catid = self.env["mercadolibre.category"].import_all_categories( self.meli_category_id, self.meli_recursive_import )
         else:
-            _logger.info("Importing active categories: "+str(mlcat_ids))
+            #_logger.info("Importing active categories: "+str(mlcat_ids))
             for ml_cat_id in mlcat_ids:
-                _logger.info("Importing single: "+str(ml_cat_id))
+                #_logger.info("Importing single: "+str(ml_cat_id))
                 ml_cat = mlcat_obj.browse([ml_cat_id])
                 if ml_cat:
                     meli_category_id = ml_cat.meli_category_id
@@ -125,13 +125,13 @@ class mercadolibre_category_attribute(models.Model):
     products_to_fix = fields.Many2many("product.template",string="Products need fixing or reimport")
 
     def fix_attribute_create_variant( self ):
-        _logger.info("fix_attribute_create_variant, convierte de no crear variant a instantaneo")
+        #_logger.info("fix_attribute_create_variant, convierte de no crear variant a instantaneo")
         #Solo borra las lineas de valores de atributos de todos los productos si el atributo esta en modo create_variant
         meli_att_creates_variant = not self.hidden and self.variation_attribute
-        _logger.info("fix_attribute_create_variant, CONVERTIR SE DEBE")
+        #_logger.info("fix_attribute_create_variant, CONVERTIR SE DEBE")
 
         if meli_att_creates_variant:
-            _logger.info("fix_attribute_create_variant, convirtiendo")
+            #_logger.info("fix_attribute_create_variant, convirtiendo")
             for att in self.product_attributes:
                 if (att.create_variant=="no_variant"):
                     #eliminar el atributo de todos los productos
@@ -142,7 +142,7 @@ class mercadolibre_category_attribute(models.Model):
                                 att_line.unlink()
                                 break;
                     if "number_related_products" in  att._fields and att.number_related_products==0:
-                        _logger.info("fix_attribute_create_variant, convirtiendo a always")
+                        #_logger.info("fix_attribute_create_variant, convirtiendo a always")
                         try:
                             att.create_variant = "always"
                         except Exception as E:
@@ -151,7 +151,7 @@ class mercadolibre_category_attribute(models.Model):
 
 
     def fix_products_reimport( self ):
-        _logger.info("fix_products_reimport, reimportar")
+        #_logger.info("fix_products_reimport, reimportar")
 
         product_ids = self.products_to_fix.mapped('id')
         product_obj = self.env["product.template"]
@@ -166,13 +166,13 @@ class mercadolibre_category_attribute(models.Model):
                 for att_line in product_tmpl.attribute_line_ids:
                     if (att_line.attribute_id.create_variant=='always' and
                         att_line.attribute_id.id in self.product_attributes.mapped('id')):
-                        _logger.info("Ok product fixed removing from list: "+str(product_tmpl.name))
+                        #_logger.info("Ok product fixed removing from list: "+str(product_tmpl.name))
                         self.products_to_fix = [(3,product_tmpl.id)]
                         continue;
 
                 #actualizar variantes:
                 try:
-                    _logger.info("Ok re-importando: "+str(product_tmpl.name))
+                    #_logger.info("Ok re-importando: "+str(product_tmpl.name))
                     product_tmpl.product_template_update()
                 except:
                     _logger.error("Error importando")
@@ -188,7 +188,7 @@ class mercadolibre_category_attribute(models.Model):
 
                     if (att_line.attribute_id.create_variant=='always' and
                         att_line.attribute_id.id in self.product_attributes.mapped('id')):
-                        _logger.info("Ok product fixed removing from list: "+str(product_tmpl.name))
+                        #_logger.info("Ok product fixed removing from list: "+str(product_tmpl.name))
                         self.products_to_fix = [(3,product_tmpl.id)]
                         continue;
 
@@ -232,7 +232,7 @@ class mercadolibre_category(models.Model):
 
     def create_ecommerce_category(self, category_id, meli=None, create_missing_website=True ):
 
-        _logger.info("Creating Ecommerce Category "+str(category_id))
+        #_logger.info("Creating Ecommerce Category "+str(category_id))
         if not ('product.public.category' in self.env):
             return False
 
@@ -270,25 +270,29 @@ class mercadolibre_category(models.Model):
                                 www_cat_fields['parent_id'] = p_id
                             www_cat_id = www_cats.create((www_cat_fields)).id
                             if www_cat_id:
-                                _logger.info("Website Category created:"+fullname)
+                               #_logger.info("Website Category created:"+fullname)
+                                pass;
 
                         p_id = www_cat_id
             return p_id
         return False
 
-    def meli_get_category( self, category_id, meli=None, create_missing_website=False ):
+    def meli_get_category( self, category_id, meli=None, create_missing_website=False, config=None ):
 
         company = self.env.user.company_id
         www_cats = False
         if 'product.public.category' in self.env:
             www_cats = self.env['product.public.category']
-        if not meli:
-            meli = self.get_meli(meli=meli)
-            if meli.need_login():
-                return meli.redirect_login()
+
 
         mlcatid = False
         www_cat_id = False
+
+        if not meli:
+            meli = self.get_meli(meli=meli)
+            if meli.need_login():
+                return mlcatid, www_cat_id
+
 
         ml_cat = self.env['mercadolibre.category'].search([('meli_category_id','=',category_id)],limit=1)
         if not ml_cat:
@@ -327,7 +331,7 @@ class mercadolibre_category(models.Model):
 
         for category in self:
             if (category and category.meli_category_id):
-                _logger.info("_get_category_url:"+str(category.meli_category_id))
+                #_logger.info("_get_category_url:"+str(category.meli_category_id))
                 response_cat = meli.get("/categories/"+str(category.meli_category_id), {'access_token':meli.access_token})
                 rjson_cat = response_cat.json()
                 category.is_branch = ( "children_categories" in rjson_cat and len(rjson_cat["children_categories"])>0 )
@@ -337,7 +341,7 @@ class mercadolibre_category(models.Model):
                 if (len(rjson_cat["path_from_root"])>=2):
                     fid = int(len(rjson_cat["path_from_root"])-2)
                     #_logger.info(fid)
-                    _logger.info(rjson_cat["path_from_root"][fid]["id"])
+                    #_logger.info(rjson_cat["path_from_root"][fid]["id"])
                     category.meli_father_category_id = rjson_cat["path_from_root"][fid]["id"]
 
 
@@ -360,16 +364,16 @@ class mercadolibre_category(models.Model):
             if (category.meli_category_id
                 and category.is_branch==False
                 and ( 1==1 or category.meli_category_attribute_ids==None or len(category.meli_category_attribute_ids)==0 )):
-                _logger.info("_get_attributes:"+str(category.meli_category_id))
+                #_logger.info("_get_attributes:"+str(category.meli_category_id))
                 category.meli_category_attributes = "https://api.mercadolibre.com/categories/"+str(category.meli_category_id)+"/attributes"
                 resp = meli.get("/categories/"+str(category.meli_category_id)+"/attributes", {'access_token':meli.access_token})
                 rjs = resp.json()
                 att_ids = []
                 for att in rjs:
                     try:
-                        _logger.info("att:")
-                        _logger.info(att)
-                        _logger.info(att['id'])
+                        #_logger.info("att:")
+                        #_logger.info(att)
+                        #_logger.info(att['id'])
                         attrs = att_obj.search( [ ('att_id','=',str(att['id'])),('name','=ilike',str(att['name'])) ] )
                         #attrs = att_obj.search( [ ('cat_id','=',False),('att_id','=',str(att['id'])),('name','=',str(att['name'])) ] )
                         attrs_field = {
@@ -396,9 +400,9 @@ class mercadolibre_category(models.Model):
                             attrs = attrs[0]
                             att_ids.append(attrs.id)
                         else:
-                            _logger.info("Add attribute")
+                            #_logger.info("Add attribute")
                             attrs_field['att_id'] = att['id']
-                            _logger.info(attrs_field)
+                            #_logger.info(attrs_field)
                             attrs = att_obj.create(attrs_field)
                             att_ids.append(attrs[0].id)
 
@@ -425,7 +429,7 @@ class mercadolibre_category(models.Model):
                                     'meli_default_id_attribute': attrs[0].id,
                                     #'meli_id': attrs[0].att_id
                                 }
-                                _logger.info("prod_att:"+str(prod_att))
+                                #_logger.info("prod_att:"+str(prod_att))
                                 if (len(prod_attrs)>=1):
                                     #tomamos el primero
                                     _logger.error("Atención multiples atributos asignados!")
@@ -445,10 +449,11 @@ class mercadolibre_category(models.Model):
                                     prod_attrs = prod_att_obj.create(prod_att)
 
                     except Exception as e:
-                        _logger.info("att:")
-                        _logger.info(att)
+                        #_logger.info("att:")
+                        #_logger.info(att)
                         _logger.info("Exception")
                         _logger.info(e, exc_info=True)
+                        pass;
 
                 #_logger.info("Add att_ids")
                 #_logger.info(att_ids)
@@ -470,7 +475,7 @@ class mercadolibre_category(models.Model):
 
     def import_category(self, category_id, meli=None, create_missing_website=False ):
 
-        _logger.info("Import Category "+str(category_id))
+       #_logger.info("Import Category "+str(category_id))
         company = self.env.user.company_id
 
         warningobj = self.env['meli.warning']
@@ -498,7 +503,7 @@ class mercadolibre_category(models.Model):
                 ml_cat_id._get_attributes(meli=meli)
 
             if not ml_cat_id:
-                _logger.info("Creating category: " + str(category_id))
+               #_logger.info("Creating category: " + str(category_id))
                 #https://api.mercadolibre.com/categories/MLA1743
                 #_logger.info("category:" + str(rjson_cat))
                 fullname = ""
@@ -515,7 +520,7 @@ class mercadolibre_category(models.Model):
 
                 #fullname = fullname + "/" + rjson_cat['name']
                 #_logger.info( "category fullname:" + str(fullname) )
-                _logger.info(fullname)
+                #_logger.info(fullname)
                 cat_fields = {
                     'name': fullname,
                     'meli_category_id': ''+str(category_id),
@@ -527,14 +532,14 @@ class mercadolibre_category(models.Model):
                 cat_fields["catalog_domain_json"] = self.get_catalog_domain_json(catalog_domain=cat_fields["catalog_domain"],meli=meli)
                 if (father and father.id):
                     cat_fields['meli_father_category'] = father.id
-                _logger.info(cat_fields)
+                #_logger.info(cat_fields)
                 ml_cat_id = ml_cat_id.create((cat_fields))
                 if (ml_cat_id.id and is_branch==False):
                   ml_cat_id._get_attributes(meli=meli)
                   ml_cat_id.get_search_chart_filters(meli=meli)
 
             if (ml_cat_id):
-                _logger.info("MercadoLibre Category Ok: "+str(ml_cat_id)+" www_cats:"+str(www_cats))
+               #_logger.info("MercadoLibre Category Ok: "+str(ml_cat_id)+" www_cats:"+str(www_cats))
 
                 if 'product.public.category' in self.env:
                     www_cat_id = ml_cat_id.public_category_id
@@ -561,7 +566,7 @@ class mercadolibre_category(models.Model):
 
                 if (father and father.id):
                     cat_fields['meli_father_category'] = father.id
-                _logger.info(cat_fields)
+                #_logger.info(cat_fields)
                 ml_cat_id.write((cat_fields))
 
                 if (ml_cat_id.id and is_branch==False):
@@ -569,16 +574,16 @@ class mercadolibre_category(models.Model):
                   ml_cat_id.get_search_chart_filters(meli=meli)
 
             if not www_cat_id and create_missing_website and 'product.public.category' in self.env:
-                _logger.info("Ecommerce category missing")
+                #_logger.info("Ecommerce category missing")
                 #_logger.info( "Creating category: " + str(category_id) )
                 #https://api.mercadolibre.com/categories/MLA1743
                 www_cat_id = self.create_ecommerce_category( category_id=category_id, meli=meli, create_missing_website=create_missing_website )
 
             if www_cat_id:
                 wcat = www_cats.browse([www_cat_id])
-                _logger.info("Ecommerce category found: "+str(www_cat_id)+" "+str(wcat))
+                #_logger.info("Ecommerce category found: "+str(www_cat_id)+" "+str(wcat))
                 if wcat and not wcat.mercadolibre_category:
-                    _logger.info("Assigning mercadolibre_category "+str(wcat)+" to "+str(ml_cat_id))
+                    #_logger.info("Assigning mercadolibre_category "+str(wcat)+" to "+str(ml_cat_id))
                     wcat.mercadolibre_category = ml_cat_id
                 if wcat and not ml_cat_id.public_category:
                     ml_cat_id.public_category = wcat
@@ -588,7 +593,7 @@ class mercadolibre_category(models.Model):
 
     def import_all_categories(self, category_root, recursive_import=False, meli=None ):
 
-        _logger.info("Importing all categories from root: "+str(category_root))
+        #_logger.info("Importing all categories from root: "+str(category_root))
 
         company = self.env.user.company_id
 
@@ -603,7 +608,7 @@ class mercadolibre_category(models.Model):
             response = meli.get("/categories/"+str(category_root), {'access_token':meli.access_token} )
 
             rjson = response and response.json()
-            _logger.info( "response:" + str(rjson) )
+            #_logger.info( "response:" + str(rjson) )
             if (rjson and "name" in rjson):
 
                 category_obj.import_category(category_id=category_root,meli=meli)
@@ -656,7 +661,7 @@ class mercadolibre_category(models.Model):
         catalog_domain_json = ""
         if catalog_domain:
             response_dom = meli.get("/catalog_domains/"+str(catalog_domain), {'access_token':meli.access_token})
-            _logger.info("response_dom para "+str(catalog_domain)+": "+str(response_dom))
+            #_logger.info("response_dom para "+str(catalog_domain)+": "+str(response_dom))
             rjson_dom = response_dom and response_dom.json()
             if rjson_dom:
                 catalog_domain_json = json.dumps(rjson_dom)
@@ -718,11 +723,11 @@ class mercadolibre_category(models.Model):
             })
 
 
-        _logger.info("params:"+str(params))
+        #_logger.info("params:"+str(params))
         response_chart = meli.post( path="/catalog/charts/search", body=body, params=params )
-        _logger.info("response_chart para "+str(cat.catalog_domain)+": "+str(response_chart))
+        #_logger.info("response_chart para "+str(cat.catalog_domain)+": "+str(response_chart))
         rjson_chart = response_chart and response_chart.json()
-        _logger.info("rjson_chart para "+str(cat.catalog_domain)+": "+str(rjson_chart))
+        #_logger.info("rjson_chart para "+str(cat.catalog_domain)+": "+str(rjson_chart))
 
         return rjson_chart
 
@@ -828,7 +833,8 @@ class mercadolibre_grid_row_col(models.Model):
         val_unit = number_struc and "unit" in number_struc and number_struc["unit"]
         val_name = number_val and "name" in number_val and number_val["name"]
         if not val_unit or not val_number:
-            _logger.info("prepare_vals grid_row_col > miss "+str(djson))
+            #_logger.info("prepare_vals grid_row_col > miss "+str(djson))
+            pass;
 
         fields = {
             "att_id": djson["id"],
@@ -905,7 +911,7 @@ class mercadolibre_grid_chart(models.Model):
 
     def create_chart(self, djson ):
         vals = self.prepare_vals(djson)
-        _logger.info("create_chart vals: " +str(vals)+" from:"+str(djson))
+        #_logger.info("create_chart vals: " +str(vals)+" from:"+str(djson))
         chart = self.search([('meli_id','=',vals["meli_id"])],limit=1)
         if not chart:
             chart = self.create(vals)
@@ -915,7 +921,7 @@ class mercadolibre_grid_chart(models.Model):
 
     def update_attributes(self, product=None):
         #
-        _logger.info("update_attributes")
+        #_logger.info("update_attributes")
         #search for an attribute SIZE also related to this chart id.
         # if not, create it
         ml_size_att = self.env["mercadolibre.category.attribute"].search([('att_id','=','SIZE')], limit=1)
@@ -925,7 +931,7 @@ class mercadolibre_grid_chart(models.Model):
                     ])
         if (all_odoo_sizes):
             #solo recargar los valores o chequearlos
-            _logger.info("update_attributes: reload")
+            #_logger.info("update_attributes: reload")
             for osi in all_odoo_sizes:
                 self.update_attribute_values( osi )
         else:
@@ -935,18 +941,19 @@ class mercadolibre_grid_chart(models.Model):
                 "meli_chart_id": self.id,
                 "create_variant": "always"
             }
-            _logger.info("update_attributes: create "+str(odoo_att_fields))
+            #_logger.info("update_attributes: create "+str(odoo_att_fields))
             osi = self.env["product.attribute"].create(odoo_att_fields)
             if (osi):
                 self.update_attribute_values( osi )
 
     def update_attribute_values(self, osi ):
         if osi:
-            _logger.info("update_attributes: reload att values in odoo")
+            #_logger.info("update_attributes: reload att values in odoo")
+            pass;
 
     def search_row_id( self, value ):
 
-        _logger.info( "search_row_id: for value: " + str(value) + "value.isnumeric() : " + str(value and value.replace(".","").isnumeric()) )
+        #_logger.info("search_row_id: for value: " + str(value) + "value.isnumeric() : " + str(value and value.replace(".","").isnumeric()) )
 
         row_id = None
         ret_row_id = None
@@ -968,7 +975,7 @@ class mercadolibre_grid_chart(models.Model):
                 #    _logger.info( "search_row_id: ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
                 #
 
-                _logger.info( "search_row_id: in attribute_values: name: " + str(attval.name)+ " value: " + str(attval.value) )
+                #_logger.info("search_row_id: in attribute_values: name: " + str(attval.name)+ " value: " + str(attval.value) )
 
                 if ( attval.name and ( value == attval.value or value == attval.name ) ):
 
@@ -976,11 +983,11 @@ class mercadolibre_grid_chart(models.Model):
                     ret_col_name = attval.name
                     ret_col_id = attval.id
 
-                    _logger.info( "search_row_id: ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
+                    #_logger.info("search_row_id: ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
 
                 else:
                     if ( attval.number and value.replace(".","").isnumeric()):
-                        _logger.info( "search_row_id: isnumeric value:" + str(float(value))+" vs attval.number:" +str(float(attval.number)) )
+                        #_logger.info("search_row_id: isnumeric value:" + str(float(value))+" vs attval.number:" +str(float(attval.number)) )
                         if ( value == attval.value or float(value)==float(attval.number) ):
 
                             ret_row_id = row_id
@@ -988,6 +995,6 @@ class mercadolibre_grid_chart(models.Model):
                             ret_col_id = attval.id
                         #    #_logger.info( "search_row_id: ret_row_id found: " + str(ret_row_id) )
                             #_logger.info( "search_row_id: ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
-                            _logger.info( "search_row_id: isnumeric ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
+                            #_logger.info("search_row_id: isnumeric ret_row_id FINAL for Value: "+str(value)+" is Col Name: "+str(ret_col_name)+" ROW ID >>> " + str(ret_row_id) )
 
         return ret_row_id

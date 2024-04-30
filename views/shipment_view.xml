@@ -113,6 +113,7 @@
                         <field name="receiver_country"/>
                         <field name="receiver_country_code"/>
                         <field name="receiver_country_id"/>
+                        <field name="receiver_zip_code"/>
                         <field name="receiver_latitude"/>
                         <field name="receiver_longitude"/>
                       </group>

@@ -65,6 +65,13 @@ class MyHTMLParser(HTMLParser):
 class product_template(models.Model):
     _inherit = "product.template"
 
+    product_origin_id = fields.Many2one('product.template', string='Producto')
+
+    def delete_image_product_now(self):
+        for record in self:
+            if record.product_template_image_ids:
+                record.product_template_image_ids.unlink()
+
     def product_template_post(self):
         product_obj = self.env['product.template']
         company = self.env.user.company_id
@@ -317,8 +324,19 @@ class product_template(models.Model):
 
         meli_categ, rjson = self._get_meli_category_from_predictor()
         if meli_categ:
-            self.meli_category = meli_categ.id
-            return warning_model.info( title='MELI WARNING', message="CATEGORY PREDICTOR", message_html="Categoria sugerida: %s" % meli_categ.name)
+            action = {
+                'name': 'Categorías posibles',
+                'view_mode': 'form',
+                'res_model': 'meli.consult.category.wizard',
+                'type': 'ir.actions.act_window',
+                'context': {'default_product_tmpl_id': self.id, 'default_categories_meli': meli_categ.ids},
+                'target': 'new'
+            }
+
+            return action
+        # if meli_categ:
+        #     self.meli_category = meli_categ.id
+        #     return warning_model.info( title='MELI WARNING', message="CATEGORY PREDICTOR", message_html="Categoria sugerida: %s" % meli_categ.name)
 
         message_html = ''
         if rjson and len(rjson):
@@ -341,16 +359,16 @@ class product_template(models.Model):
         _logger.info(url)
         response = meli.get(url)
         rjson = response.json()
-        meli_categ = False
+        meli_categ = self.env['mercadolibre.category'].sudo()
         _logger.info(rjson)
         _logger.info(isinstance(rjson, list))
         if rjson and isinstance(rjson, list):
-            if "category_id" in rjson[0]:
-                #_logger.info("Take first suggestion")
-                #meli_categ = self.env['mercadolibre.category'].import_category(rjson[0]['id'])
-                meli_categ = self.env['mercadolibre.category'].import_category( rjson[0]['category_id'], meli=meli )
-                if (meli_categ==None):
-                    _logger.info("Import category failed.")
+            for data in rjson:
+                if "category_id" in data:
+                    #_logger.info("Take first suggestion")
+                    meli_categ += self.env['mercadolibre.category'].import_category(data['category_id'], meli=meli )
+                    if (meli_categ==None):
+                        _logger.info("Import category failed.")
         return meli_categ, rjson
 
     def _get_pricelist_for_meli(self):
@@ -717,7 +735,7 @@ class product_product(models.Model):
         mlcatid = False
         www_cat_id = False
 
-        mlcatid, www_cat_id = self.env["mercadolibre.category"].meli_get_category( category_id, create_missing_website=config.mercadolibre_create_website_categories )
+        mlcatid, www_cat_id = self.env["mercadolibre.category"].meli_get_category( category_id, meli=meli, create_missing_website=config.mercadolibre_create_website_categories, config=config )
 
         if (mlcatid):
             product.write( {'meli_category': mlcatid} )
@@ -1497,7 +1515,7 @@ class product_product(models.Model):
         #    product._meli_set_images(product_template=product_template, pictures=pictures, rjson=rjson)
 
         #categories
-        product._meli_set_category( product_template, rjson['category_id'] )
+        product._meli_set_category( product_template, rjson['category_id'], meli=meli, config=config )
 
         #prices
         force_price_for_variant = True
@@ -2224,6 +2242,7 @@ class product_product(models.Model):
 
         #loop over images
         var_image_ids = variant_image_ids(product)
+        #_logger.info("IMAGES ML (Variants): %s" % var_image_ids.ids)
         if (var_image_ids and len(var_image_ids)):
             for imix in range(0,len(var_image_ids)):
                 if (company.mercadolibre_do_not_use_first_image and imix==0):
@@ -2236,6 +2255,7 @@ class product_product(models.Model):
 
         #loop over images
         tpl_image_ids = template_image_ids(product)
+        #_logger.info("IMAGES ML (Template): %s" % tpl_image_ids.ids)
         if (tpl_image_ids and len(tpl_image_ids)):
             for imix in range(0,len(tpl_image_ids)):
                 if (company.mercadolibre_do_not_use_first_image and imix==0):
@@ -2297,7 +2317,8 @@ class product_product(models.Model):
                     ilink = image_uploaded['secure_url']
                 if 'size' in image_uploaded:
                     isize = image_uploaded['size']
-
+                #_logger.info("SIZE: %s" % isize)
+                #_logger.info("LINK: %s" % ilink)
                 product_image.meli_imagen_id = rjson['id']
                 product_image.meli_imagen_max_size = rjson['max_size']
                 product_image.meli_imagen_link = ilink
@@ -2610,6 +2631,7 @@ class product_product(models.Model):
         if var_attributes_grid:
             updated_attributes.append(var_attributes_grid)
 
+        #_logger.info("updated_attributes: "+str(updated_attributes))
         return updated_attributes
 
     def _update_row_size_grid_attribute( self, attributes=[], var_info = [] ):
@@ -3862,6 +3884,7 @@ class product_product(models.Model):
             _st_mv_ids = var.stock_move_ids and var.stock_move_ids.filtered(lambda x: x.create_date )
             var.meli_stock_moves_update = (_st_mv_ids and _st_mv_ids.sorted(lambda o: o.create_date, reverse=True)[0].create_date) or False
 
+    @api.depends('stock_move_ids')
     def process_meli_stock_moves_update( self ):
         for var in self:
             var._meli_stock_moves_update()
