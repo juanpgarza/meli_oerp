@@ -1148,6 +1148,7 @@ class mercadolibre_orders(models.Model):
                     Receiver = order_json['shipping']['receiver_address']
                 elif ('id' in order_json['shipping']):
                     Shipment = self.env["mercadolibre.shipment"].search([('shipping_id','=',order_json['shipping']["id"])],limit=1)
+                    #_logger.info("Shipment:"+str(Shipment))
                     if (len(Shipment)==1):
                         Receiver = {
                             'receiver_address': Shipment.receiver_address_line,
