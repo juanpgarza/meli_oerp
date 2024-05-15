@@ -2617,7 +2617,8 @@ class product_product(models.Model):
                 barcode_updated = True
                 att = { "id": att["id"], "value_name": variant.barcode }
 
-            if att:
+            #no duplicar row id
+            if att and "id" in att and att["id"]!="SIZE_GRID_ROW_ID":
                 updated_attributes.append(att)
 
         if not sku_updated and set_sku and variant.default_code:
