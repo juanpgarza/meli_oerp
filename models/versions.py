@@ -2,6 +2,7 @@
 from dateutil.parser import *
 from datetime import *
 
+import unidecode
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -14,6 +15,21 @@ cl_vat_sep_million = "."
 #message types
 order_message_type = "notification"
 product_message_type = "notification"
+
+def really_compare( a, b, sensitive=False ):
+
+    a = str(a).capitalize()
+    b = str(b).capitalize()
+
+    if (sensitive):
+        return (a==b)
+
+    a = unidecode.unidecode(a)
+    b = unidecode.unidecode(b)
+
+    return (a==b)
+
+
 
 #price from pricelist
 def get_price_from_pl( pricelist, product, quantity ):

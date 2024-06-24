@@ -355,7 +355,7 @@ class sale_order(models.Model):
                         return (self.meli_paid_amount - self.meli_coupon_amount)
                 return 0
 
-        if total_config in ['paid_amount']:
+        if total_config in ['paid_amount','transaction_amount']:
             return (self.meli_paid_amount - self.meli_coupon_amount)
 
         if total_config in ['total_amount']:

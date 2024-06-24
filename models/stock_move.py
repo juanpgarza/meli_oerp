@@ -99,7 +99,7 @@ class StockMove(models.Model):
 
         return True
 
-    def _action_assign(self):
+    def _action_assign(self, force_qty=False):
         company = self.env.user.company_id
 
         res = super(StockMove, self)._action_assign()
