@@ -65,20 +65,31 @@ class mercadolibre_shipment_print(models.TransientModel):
             config = company
 
         _logger.info( "shipment_print context: " + str(context) )
-        shipment_ids = ('active_ids' in context and context['active_ids']) or []
+        active_ids = ('active_ids' in context and context['active_ids']) or []
+        shipment_ids = []
         #check if model is stock_picking or mercadolibre.shipment
         #stock.picking > sale_id is the order, then the shipment is sale_id.meli_shipment
         active_model = context.get("active_model")
         _logger.info( "shipment_print active_model: " + str(active_model) )
+
         if active_model == "stock.picking":
             shipment_ids_from_pick = []
-            for spick_id in shipment_ids:
+            for spick_id in active_ids:
                 spick = self.env["stock.picking"].browse(spick_id)
                 sale_order = spick.sale_id
                 if sale_order and sale_order.meli_shipment:
                     shipment_ids_from_pick.append(sale_order.meli_shipment.id)
             shipment_ids = shipment_ids_from_pick
             _logger.info("stock.picking shipment_ids:"+str(shipment_ids))
+
+        if active_model == "sale.order":
+            shipment_ids_from_order = []
+            for order_id in active_ids:
+                sale_order = self.env["sale.order"].browse(order_id)
+                if sale_order and sale_order.meli_shipment:
+                    shipment_ids_from_order.append(sale_order.meli_shipment.id)
+            shipment_ids = shipment_ids_from_order
+            _logger.info("sale.order shipment_ids:"+str(shipment_ids))
 
         shipment_obj = self.env['mercadolibre.shipment']
         warningobj = self.env['meli.warning']
@@ -92,6 +103,50 @@ class mercadolibre_shipment_print(models.TransientModel):
         _logger.info(shipment_ids)
 
         return self.shipment_print_report(shipment_ids=shipment_ids,meli=meli,config=config,include_ready_to_print=self.include_ready_to_print)
+
+    def shipment_sale_order_print( self, context=None, meli=None, config=None):
+        _logger.info("shipment_sale_order_print")
+        context = context or self.env.context
+        company = self.env.user.company_id
+        if not config:
+            config = company
+        order_ids = ('active_ids' in context and context['active_ids']) or []
+        #product_obj = self.env['product.template']
+        sale_obj = self.env['sale.order']
+        shipment_obj = self.env['mercadolibre.shipment']
+        warningobj = self.env['meli.warning']
+
+        if not meli:
+            meli = self.env['meli.util'].get_new_instance(company)
+            if meli.need_login():
+                return meli.redirect_login()
+
+        sep = ""
+        shipment_ids= []
+
+        for order_id in order_ids:
+            #sacar la orden relacionada
+            #de la orden sacar el shipping id
+            sorder = sale_obj.browse(order_id)
+            shipid = None
+            shipment = None
+            if (sorder):
+                if (sorder.meli_shipment):
+                    shipid = sorder.meli_shipment.id
+                if ( (not shipid) and len(sorder.meli_orders) ):
+                    shipment = shipment_obj.search([('shipping_id','=',sorder.meli_orders[0].shipping_id)])
+                    if (shipment and shipment.status=="ready_to_ship"):
+                        shipid = shipment.id
+            else:
+                continue;
+
+            if (shipid):
+                #shipment = shipment_obj.browse(shipid)
+                #shipment.update()
+                shipment_ids.append(shipid)
+
+        return self.shipment_print_report(shipment_ids=shipment_ids,meli=meli,config=config,include_ready_to_print=self.include_ready_to_print)
+
 
     def shipment_stock_picking_print(self, context=None, meli=None, config=None):
         _logger.info("shipment_stock_picking_print")
@@ -124,7 +179,7 @@ class mercadolibre_shipment_print(models.TransientModel):
                     shipid = pick.sale_id.meli_shipment.id
                 if ( (not shipid) and len(pick.sale_id.meli_orders) ):
                     shipment = shipment_obj.search([('shipping_id','=',pick.sale_id.meli_orders[0].shipping_id)])
-                    if (shipment):
+                    if (shipment and shipment.status=="ready_to_ship"):
                         shipid = shipment.id
             else:
                 continue;
@@ -164,13 +219,15 @@ class mercadolibre_shipment_print(models.TransientModel):
 
         full_links = ''
         for atoken in full_url_link_pdf:
-            _logger.info('atoken:'+str(atoken))
+            #_logger.info('atoken:'+str(atoken))
             full_ids+= full_url_link_pdf[atoken]['full_ids']
             full_link = full_url_link_pdf[atoken]['full_link']
             #_logger.info(full_link)
             if full_link:
                 full_links+= '<a href="'+full_link+'" target="_blank"><strong><u>Descargar PDF</u></strong></a>'
 
+        # full_url_link_pdf = {'otken': {'full_link': "https://api.mercadolibre.com/shipment_labels?shipment_ids=43272588025&amp;response_type=pdf&amp;access_token=APP_USR-6866649250908201-040908-e22cf17b7005c0ee37b953b972c7c53b-1682539048"}}
+        self.full_links= json.dumps(full_url_link_pdf)
         if (full_links):
             return warningobj.info( title='Impresión de etiquetas', message="Abrir links para descargar PDF", message_html=""+full_ids+'<br><br>'+full_links+"<br><br>Reporte de no impresas:<br>"+reporte )
         else:
@@ -178,6 +235,7 @@ class mercadolibre_shipment_print(models.TransientModel):
 
 
     include_ready_to_print = fields.Boolean(string="Include Ready To Print",default=False)
+    full_links = fields.Text(default='{}')
 
 
 
@@ -195,8 +253,8 @@ class mercadolibre_shipment_update(models.TransientModel):
         shipment_obj = self.env['mercadolibre.shipment']
         warningobj = self.env['meli.warning']
 
-        _logger.info("shipment_update")
-        _logger.info(shipment_ids)
+        #_logger.info("shipment_update")
+        #_logger.info(shipment_ids)
         #_logger.info( "shipment_update: context: "+str(context)+" meli: "+str(meli)+ " config: " +str(config) )
 
 
@@ -226,7 +284,7 @@ class mercadolibre_shipment(models.Model):
     _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
 
     name = fields.Char(string='Name',index=True)
-    site_id = fields.Char(string='Site id')
+    site_id = fields.Char(string='Site id',index=True)
     posting_id = fields.Many2one("mercadolibre.posting",string="Posting")
     shipping_id = fields.Char(string='Envio Id',index=True)
     order_id = fields.Char(string='Order Id',index=True)
@@ -238,7 +296,7 @@ class mercadolibre_shipment(models.Model):
     company_id = fields.Many2one("res.company", related="order.company_id",string="Company",index=True)
 
 
-    mode = fields.Char('Mode')
+    mode = fields.Char(string='Mode')
     shipping_mode = fields.Char(string='Shipping mode')
 
     date_created = fields.Datetime(string='Creation date')
@@ -261,7 +319,7 @@ class mercadolibre_shipment(models.Model):
 
     date_first_printed = fields.Datetime(string='First Printed date',index=True)
 
-    receiver_id = fields.Char('Receiver Id')
+    receiver_id = fields.Char(string='Receiver Id',index=True)
     receiver_address_id = fields.Char('Receiver address id')
     receiver_address_phone = fields.Char('Phone')
     receiver_address_name = fields.Char('Nombre')
@@ -275,6 +333,7 @@ class mercadolibre_shipment(models.Model):
     receiver_state = fields.Char('Estado')
     receiver_state_code = fields.Char('Estado ID')
     receiver_state_id = fields.Many2one('res.country.state',string='State')
+    receiver_zip_code = fields.Char(string='Zip Code')
 
     receiver_country = fields.Char('Pais')
     receiver_country_code = fields.Char('Código Pais')
@@ -282,7 +341,7 @@ class mercadolibre_shipment(models.Model):
     receiver_latitude = fields.Char('Latitud')
     receiver_longitude = fields.Char('Longitud')
 
-    sender_id = fields.Char('Sender Id')
+    sender_id = fields.Char(string='Sender Id',index=True)
     sender_address_id = fields.Char('Sender Address Id')
     sender_address_line = fields.Char('Sender Address Line')
     sender_address_comment = fields.Text('Sender Address Comment')
@@ -303,7 +362,7 @@ class mercadolibre_shipment(models.Model):
     pdfimage_file = fields.Binary(string='Pdf Image File',attachment=True)
     pdfimage_filename = fields.Char(string='Pdf Image Filename')
 
-    seller_id = fields.Many2one("res.users",string="Seller")
+    seller_id = fields.Many2one("res.users",string="Seller",index=True)
 
     pack_order = fields.Boolean(string="Carrito de compra")
 
@@ -326,18 +385,18 @@ class mercadolibre_shipment(models.Model):
             sorder = shipment.sale_order
             if (not sorder or not order):
                 continue;
-                
+
             if (sorder and sorder.meli_update_forbidden):
                 _logger.error("Forbidden to update sale order by meli_oerp" )
                 return {'error': 'Forbidden to update sale order by meli_oerp' }
 
             sorder.meli_shipping_cost = shipment.shipping_cost
             sorder.meli_shipping_list_cost = shipment.shipping_list_cost
-            sorder.meli_shipment_logistic_type = shipment.logistic_type
+            sorder.meli_shipment_logistic_type = shipment.logistic_type or shipment.mode
 
             order.shipping_cost = shipment.shipping_cost
             order.shipping_list_cost = shipment.shipping_list_cost
-            order.shipment_logistic_type = shipment.logistic_type
+            order.shipment_logistic_type = shipment.logistic_type or shipment.mode
 
             if (sorder.partner_shipping_id):
                 partner_shipping_id = sorder.partner_shipping_id
@@ -350,13 +409,16 @@ class mercadolibre_shipment(models.Model):
                 #sorder.partner_id.state = ships.receiver_state
 
             ship_name = shipment.tracking_method or (shipment.mode=="me1" and "ME1 - zip") or (shipment.mode=="custom" and "Personalizado")  or (shipment.logistic_type=="self_service" and "Personalizado MFlex")
-            
+
 
             if not ship_name or len(ship_name)==0:
                 continue;
-                
+
+            ship_default_code = ship_name
+
             if (shipment.mode=="me1"):
                 product_shipping_id = product_obj.search([('default_code','ilike','ENVIO-ME1')])
+                ship_default_code = 'ENVIO-ME1'
             else:
                 product_shipping_id = product_obj.search([('default_code','ilike','ENVIO')])
                 if (len(product_shipping_id)==0):
@@ -370,20 +432,20 @@ class mercadolibre_shipment(models.Model):
                 product_shipping_id = None
                 ship_prod = {
                     "name": ship_name,
-                    "default_code": ship_name,
+                    "default_code": ship_default_code,
                     "type": "service",
                     #"taxes_id": None
                     #"categ_id": 279,
                     #"company_id": company.id
                 }
-                _logger.info(ship_prod)
+                #_logger.info(ship_prod)
                 product_shipping_tpl = product_tpl.create((ship_prod))
                 if (product_shipping_tpl):
                     product_shipping_id = product_shipping_tpl.product_variant_ids[0]
-            _logger.info(product_shipping_id)
+            #_logger.info(product_shipping_id)
 
             if (not product_shipping_id):
-                _logger.info('Failed to create shipping product service')
+                #_logger.info('Failed to create shipping product service')
                 continue
 
             #CO
@@ -409,7 +471,8 @@ class mercadolibre_shipment(models.Model):
                 st_pick.carrier_tracking_ref = shipment.tracking_number
 
             if (shipment.tracking_method == "MEL Distribution"):
-                _logger.info('MEL Distribution, not adding to order')
+                #_logger.info('MEL Distribution, not adding to order')
+                pass;
                 #continue
 
             del_price = shipment.shipping_cost
@@ -423,39 +486,39 @@ class mercadolibre_shipment(models.Model):
             conflict = ( received_amount == 0.0 )
 
             if conflict:
-                _logger.info("Order totals conflict, manual check needed.")
+                _logger.error("Order totals conflict, manual check needed.")
                 continue;
             #if (1==2):
             #    received_amount = sorder.meli_total_amount
 
-            _logger.info("delivery_price:"+str(delivery_price)+" received_amount: "+str(received_amount) +" amount_total:"+str(sorder.amount_total) )
+            #_logger.info("delivery_price:"+str(delivery_price)+" received_amount: "+str(received_amount) +" amount_total:"+str(sorder.amount_total) )
             shipment_amount_cond = abs(received_amount - sorder.amount_total)>1.0 and (delivery_price>0.0)
 
-            _logger.info("shipment_amount_cond:"+str(shipment_amount_cond))
+            #_logger.info("shipment_amount_cond:"+str(shipment_amount_cond))
 
             shipment_amount_cond_fix = (sorder.amount_total - received_amount)>1.0 and (delivery_price>0.0)
-            _logger.info("shipment_amount_cond_fix:"+str(shipment_amount_cond_fix))
+            #_logger.info("shipment_amount_cond_fix:"+str(shipment_amount_cond_fix))
 
             shipment_amount_cond_fix2 = (sorder.amount_total - received_amount)<-1.0 and (delivery_price>0.0)
-            _logger.info("shipment_amount_cond_fix2:"+str(shipment_amount_cond_fix))
+            #_logger.info("shipment_amount_cond_fix2:"+str(shipment_amount_cond_fix))
 
-            _logger.info("ship_carrier_id:"+str(ship_carrier_id)+" sorder.carrier_id:"+str(sorder.carrier_id))
+            #_logger.info("ship_carrier_id:"+str(ship_carrier_id)+" sorder.carrier_id:"+str(sorder.carrier_id))
 
             if shipment_amount_cond_fix:
-                _logger.info("shipment_cond: "+str(shipment_amount_cond)+" paid: "+str(received_amount)+" vs total: "+str(sorder.amount_total))
+                #_logger.info("shipment_cond: "+str(shipment_amount_cond)+" paid: "+str(received_amount)+" vs total: "+str(sorder.amount_total))
                 if ( ship_carrier_id and sorder.carrier_id):
                     delivery_price = 0.0
-                    _logger.info("set_delivery_line:"+str(delivery_price))
+                    #_logger.info("set_delivery_line:"+str(delivery_price))
                     set_delivery_line( sorder, delivery_price, "Defined by MELI" )
                 delivery_price = 0.0
 
             if shipment_amount_cond_fix2 and ship_carrier_id and sorder.carrier_id:
-                _logger.info("set_delivery_line (fix2):"+str(delivery_price))
+                #_logger.info("set_delivery_line (fix2):"+str(delivery_price))
                 set_delivery_line( sorder, delivery_price, "Defined by MELI" )
 
 
             if (ship_carrier_id and not sorder.carrier_id):
-                _logger.info("set_delivery_line (first set carrier):"+str(delivery_price))
+                #_logger.info("set_delivery_line (first set carrier):"+str(delivery_price))
                 sorder.carrier_id = ship_carrier_id
                 #vals = sorder.carrier_id.rate_shipment(sorder)
                 #if vals.get('success'):
@@ -463,6 +526,7 @@ class mercadolibre_shipment(models.Model):
                 delivery_message = "Defined by MELI"
                 #delivery_price = vals['price']
                 #display_price = vals['carrier_price']
+                #_logger.info("Agregar delivery line delivery_price:"+str(delivery_price))
                 set_delivery_line(sorder, delivery_price, delivery_message )
 
             if (sorder.carrier_id):
@@ -470,10 +534,31 @@ class mercadolibre_shipment(models.Model):
                 if 1==2 and delivery_price<=0.0:
                     sorder._remove_delivery_line()
 
+                #UPDATE PRICE
                 delivery_line = get_delivery_line(sorder)
+
                 if delivery_line and abs(delivery_line.price_unit-delivery_price)>1.0:
                     delivery_message = "Defined by MELI"
+                    #_logger.info("Agregar delivery line delivery_price:"+str(delivery_price))
                     set_delivery_line(sorder, delivery_price, delivery_message )
+
+
+                if shipment.shipping_list_cost:
+                    delivery_line = get_delivery_line( sorder )
+                    if delivery_line and 'purchase_price' in delivery_line._fields:
+                        delivery_line.purchase_price = float(shipment.shipping_list_cost)
+
+                if 1==1 and delivery_price<=0.0:
+                    #_logger.info("Procesar delivery_price == 0")
+                    delivery_line = get_delivery_line(sorder)
+                    if delivery_line:
+                        #_logger.info("Procesar delivery_price == 0 setear qty_to_invoice en 0")
+                        delivery_line.price_unit = 0.0
+                        delivery_line.qty_to_invoice = 0
+                    #_logger.info("Procesar delivery_price == 0 remover linea")
+                    #sorder._remove_delivery_line()
+
+
 
 
 
@@ -501,15 +586,20 @@ class mercadolibre_shipment(models.Model):
                     #saleorderline_item_ids.tax_id = None
                 else:
                     try:
-                        _logger.info("removing saleorderline_item_ids")
+                        #_logger.info("removing saleorderline_item_ids")
+                        pass;
                         #saleorderline_item_ids.unlink()
                     except:
-                        _logger.info("Could not unlink.")
+                        #_logger.info("Could not unlink.")
+                        pass;
 
-    def partner_delivery_id( self, partner_id=None, Receiver=None ):
+    def partner_delivery_id( self, partner_id=None, Receiver=None, config=None ):
 
         if (not Receiver or not partner_id):
             _logger.info("partner_delivery_id > no Partner or no Receiver")
+            return None
+
+        if (config and not config.mercadolibre_cron_get_orders_shipment_client):
             return None
 
         orders_obj = self.env['mercadolibre.orders']
@@ -550,12 +640,12 @@ class mercadolibre_shipment(models.Model):
                                                     ('street','=',pdelivery_fields['street'])],
                                                     limit=1)
         if not deliv_id or len(deliv_id)==0:
-            _logger.info("Create partner delivery")
+            #_logger.info("Create partner delivery")
             respartner_obj = self.env['res.partner']
             try:
                 deliv_id = respartner_obj.create(pdelivery_fields)
                 if deliv_id:
-                    _logger.info("Created Res Partner Delivery "+str(deliv_id))
+                    #_logger.info("Created Res Partner Delivery "+str(deliv_id))
                     partner_shipping_id = deliv_id
             except Exception as e:
                 _logger.error("Created res.partner delivery issue.")
@@ -581,7 +671,7 @@ class mercadolibre_shipment(models.Model):
         return partner_shipping_id
 
     #Return shipment object based on mercadolibre.orders "order"
-    def fetch( self, order, meli=None, config=None ):
+    def fetch_shipment( self, order, meli=None, config=None ):
         #_logger.info("ship fetch")
         company = self.env.user.company_id
         if not config:
@@ -602,8 +692,8 @@ class mercadolibre_shipment(models.Model):
 
         ship_id = False
         shipment = None
-
-        if (order and order.shipping_id):
+        #_logger.info("order: "+str(order))
+        if (order and "shipping_id" in order._fields and order.shipping_id):
             ship_id = order.shipping_id
         else:
             return None
@@ -724,7 +814,8 @@ class mercadolibre_shipment(models.Model):
                         "receiver_country": ship_json["receiver_address"]["country"]["name"],
                         "receiver_country_code": ship_json["receiver_address"]["country"]["id"],
                         "receiver_latitude": ship_json["receiver_address"]["latitude"],
-                        "receiver_longitude": ship_json["receiver_address"]["longitude"]
+                        "receiver_longitude": ship_json["receiver_address"]["longitude"],
+                        "receiver_zip_code": (("zip_code" in ship_json["receiver_address"]) and ship_json["receiver_address"]["zip_code"]) or False
                     })
                     receiver_phone = ("receiver_phone" in ship_json["receiver_address"] and ship_json["receiver_address"]["receiver_phone"] and not "XXXX" in ship_json["receiver_address"]["receiver_phone"] and ship_json["receiver_address"]["receiver_phone"])
                     if receiver_phone:
@@ -772,7 +863,7 @@ class mercadolibre_shipment(models.Model):
                         _logger.error( items_json["message"] )
                     else:
                         if (len(items_json)>1 or ( len(items_json)==1 and order.pack_order==True ) ):
-                            _logger.info("Es carrito")
+                            #_logger.info("Es carrito")
                             ship_fields["pack_order"] = True
                         else:
                             ship_fields["pack_order"] = False
@@ -802,20 +893,21 @@ class mercadolibre_shipment(models.Model):
                                 full_orders = False
                                 break;
 
-                        _logger.info(items_json)
-                        _logger.info("full_orders:"+str(full_orders))
+                        #_logger.info(items_json)
+                        #_logger.info("full_orders:"+str(full_orders))
                         if (full_orders):
                             #We can create order with all items now
                             ship_fields["orders"] = [(6, 0, all_orders_ids)]
 
                 shipment = shipment_obj.search([('shipping_id','=', ship_id)])
-                #_logger.info(ships)
+                #_logger.info("shipment:"+str(shipment)+" ship_id:"+str(ship_id)+" ship_fields:"+str(ship_fields) )
                 if (len(shipment)==0):
                     #_logger.info("Importing shipment: " + str(ship_id))
                     #_logger.info(str(ship_fields))
                     shipment = shipment_obj.create((ship_fields))
                     if (shipment):
-                        _logger.info("Created shipment ok!")
+                        #_logger.info("Created shipment ok!")
+                        pass;
                 else:
                     #_logger.info("Updating shipment: " + str(ship_id))
                     shipment.write((ship_fields))
@@ -826,34 +918,34 @@ class mercadolibre_shipment(models.Model):
                     for item in items_json:
                         shipment.update_item(item)
 
-                try:
-                    #_logger.info("ships.pdf_filename:")
-                    #_logger.info(shipment.pdf_filename)
-                    if (1==1 and shipment.pdf_filename):
-                        #_logger.info("We have a pdf file")
-                        if (shipment.pdfimage_filename==False):
-                            #_logger.info("Try create a pdf image file")
-                            data = base64.b64decode( shipment.pdf_file )
-                            images = convert_from_bytes(data, dpi=300,fmt='jpg')
-                            for image in images:
-                                image_filename = "/tmp/%s-page%d.jpg" % ("Shipment_"+shipment.shipping_id, images.index(image))
-                                image.save(image_filename, "JPEG")
-                                if (images.index(image)==0):
-                                    imgdata = urlopen("file://"+image_filename).read()
-                                    shipment.pdfimage_file = base64.encodestring(imgdata)
-                                    shipment.pdfimage_filename = "Shipment_"+shipment.shipping_id+".jpg"
-                            #if (len(images)):
-                            #    _logger.info(images)
-                                #for image in images:
-                                #base64.b64decode( pimage.image )
-                            #    image = images[1]
-                            #    ships.pdfimage_file = base64.encodestring(image.tobytes())
-                            #    ships.pdfimage_filename = "Shipment_"+ships.shipping_id+".jpg"
-                except Exception as e:
-                    _logger.info("Error converting pdf to jpg: try installing pdf2image and poppler-utils, like this:")
-                    _logger.info("sudo apt install poppler-utils && sudo pip install pdf2image")
-                    _logger.info(e, exc_info=True)
-                    pass;
+                    try:
+                        #_logger.info("ships.pdf_filename:")
+                        #_logger.info(shipment.pdf_filename)
+                        if (1==1 and shipment.pdf_filename):
+                            #_logger.info("We have a pdf file")
+                            if (shipment.pdfimage_filename==False):
+                                #_logger.info("Try create a pdf image file")
+                                data = base64.b64decode( shipment.pdf_file )
+                                images = convert_from_bytes(data, dpi=300,fmt='jpg')
+                                for image in images:
+                                    image_filename = "/tmp/%s-page%d.jpg" % ("Shipment_"+shipment.shipping_id, images.index(image))
+                                    image.save(image_filename, "JPEG")
+                                    if (images.index(image)==0):
+                                        imgdata = urlopen("file://"+image_filename).read()
+                                        shipment.pdfimage_file = base64.encodestring(imgdata)
+                                        shipment.pdfimage_filename = "Shipment_"+shipment.shipping_id+".jpg"
+                                #if (len(images)):
+                                #    _logger.info(images)
+                                    #for image in images:
+                                    #base64.b64decode( pimage.image )
+                                #    image = images[1]
+                                #    ships.pdfimage_file = base64.encodestring(image.tobytes())
+                                #    ships.pdfimage_filename = "Shipment_"+ships.shipping_id+".jpg"
+                    except Exception as e:
+                        _logger.info("Error converting pdf to jpg: try installing pdf2image and poppler-utils, like this:")
+                        _logger.info("sudo apt install poppler-utils && sudo pip install pdf2image")
+                        _logger.info(e, exc_info=True)
+                        pass;
 
                 #associate order if it was non pack order created bir orders.py
                 if (ship_fields["pack_order"]==False):
@@ -947,10 +1039,16 @@ class mercadolibre_shipment(models.Model):
                         #_logger.info("ship_json[receiver_address]:"+str(ship_json["receiver_address"]) )
                         partner_shipping_id = None
                         if "receiver_address" in ship_json:
-                            partner_shipping_id = self.partner_delivery_id( partner_id=partner_id, Receiver=ship_json["receiver_address"])
+                            if config.mercadolibre_cron_get_orders_shipment_client:
+                                partner_shipping_id = self.partner_delivery_id( partner_id=partner_id, Receiver=ship_json["receiver_address"])
 
                         if partner_shipping_id:
-                            meli_order_fields['partner_shipping_id'] = partner_shipping_id.id
+                            sorder = sorder_pack
+                            shipping_partner_already_set = (sorder and sorder.partner_shipping_id and sorder.partner_shipping_id.id == partner_shipping_id.id)
+                            update_shipping = not sorder or (sorder and not sorder.partner_shipping_id)
+                            update_shipping = update_shipping or not shipping_partner_already_set
+                            if (update_shipping):
+                                meli_order_fields['partner_shipping_id'] = partner_shipping_id.id
 
                         if ("pack_id" in all_orders[0] and all_orders[0]["pack_id"]):
                             meli_order_fields['name'] = "ML %s" % ( str(all_orders[0]["pack_id"]) )
@@ -971,7 +1069,10 @@ class mercadolibre_shipment(models.Model):
                             sorder_pack.meli_fix_team( meli=meli, config=config )
                         else:
                             sorder_pack = self.env["sale.order"].create(meli_order_fields)
-                            sorder_pack.meli_fix_team( meli=meli, config=config )
+                            if sorder_pack:
+                                sorder_pack.meli_fix_team( meli=meli, config=config )
+                                order.message_post(body=str("Sale order created (pack)!"),message_type=order_message_type)
+
 
                         if (sorder_pack.id):
                             shipment.sale_order = sorder_pack
@@ -1006,7 +1107,7 @@ class mercadolibre_shipment(models.Model):
                                 if (mOrder.fee_amount):
                                     sorder_pack.meli_fee_amount = sorder_pack.meli_fee_amount + mOrder.fee_amount
 
-                                saleorderline_item_fields.update( order._set_product_unit_price( product_related_obj, mOrder.order_items[0] ) )
+                                saleorderline_item_fields.update( order._set_product_unit_price( product_related_obj, mOrder.order_items[0], config=config ) )
 
                                 saleorderline_item_ids = saleorderline_obj.search( [('meli_order_item_id','=',saleorderline_item_fields['meli_order_item_id']),
                                                                                     ('meli_order_item_variation_id','=',saleorderline_item_fields['meli_order_item_variation_id']),
@@ -1016,9 +1117,13 @@ class mercadolibre_shipment(models.Model):
                                     if sorder_pack.amount_total<(sorder_pack.meli_paid_amount-sorder_pack.meli_coupon_amount):
                                         saleorderline_item_ids = saleorderline_obj.create( ( saleorderline_item_fields ))
                                 else:
+                                    #_logger.info("saleorderline_item_ids:"+str(saleorderline_item_ids))
+                                    #_logger.info("saleorderline_item_ids tax_id:"+str(saleorderline_item_ids.tax_id))
+                                    #_logger.info("saleorderline_item_ids tax_id company_id:"+str(saleorderline_item_ids.tax_id.company_id))
                                     saleorderline_item_ids.write( ( saleorderline_item_fields ) )
                     else:
-                        _logger.info("partner receiver id not founded:"+str(ship_fields['receiver_id']))
+                        #_logger.info("partner receiver id not founded:"+str(ship_fields['receiver_id']))
+                        pass;
 
         if (shipment):
             shipment._update_sale_order_shipping_info( order, meli=meli, config=config )
@@ -1051,9 +1156,9 @@ class mercadolibre_shipment(models.Model):
 
     def update( self, context=None, meli=None, config=None ):
 
-        _logger.info( "update: context: "+str(context)+ " meli: "+str(meli)+ " config: " +str(config) )
+        #_logger.info( "update: context: "+str(context)+ " meli: "+str(meli)+ " config: " +str(config) )
 
-        self.fetch( self.order, meli=meli, config=config )
+        self.fetch_shipment( self.order, meli=meli, config=config )
 
         return {}
 
@@ -1080,8 +1185,15 @@ class mercadolibre_shipment(models.Model):
         return {}
 
     def shipment_print( self, meli=None, config=None, include_ready_to_print=None ):
+
+        context = self.env.context
+        company = self.env.user.company_id
+
         shipment= self
         shipment.update()
+
+        if not meli:
+            meli = self.env['meli.util'].get_new_instance( company )
 
         ship_report = { 'message': '', 'access_token': meli.access_token }
 
@@ -1094,9 +1206,9 @@ class mercadolibre_shipment(models.Model):
             if (shipment.substatus=="printed" or include_ready_to_print):
                 try:
                     data = urlopen(shipment.pdf_link).read()
-                    _logger.info(data)
+                    #_logger.info(data)
                     shipment.pdf_filename = "Shipment_"+shipment.shipping_id+".pdf"
-                    shipment.pdf_file = base64.encodestring(data)
+                    shipment.pdf_file = base64.b64encode(data)
                     images = convert_from_bytes(data, dpi=300,fmt='jpg')
                     if (1==1 and len(images)>1):
                         for image in images:
@@ -1104,7 +1216,7 @@ class mercadolibre_shipment(models.Model):
                             image.save(image_filename, "JPEG")
                             if (images.index(image)==0):
                                 imgdata = urlopen("file://"+image_filename).read()
-                                shipment.pdfimage_file = base64.encodestring(imgdata)
+                                shipment.pdfimage_file = base64.b64encode(imgdata)
                                 shipment.pdfimage_filename = "Shipment_"+shipment.shipping_id+".jpg"
 
                 except Exception as e:
@@ -1140,7 +1252,7 @@ class AccountInvoice(models.Model):
         if (self.origin):
             order = self.env["sale.order"].search([('name','=',self.origin)])
             if (order.id):
-                _logger.info("Order found in _get_shipment:"+str(order.name))
+                #_logger.info("Order found in _get_shipment:"+str(order.name))
                 #if (order.meli_order_id)
                 if (order.meli_shipment):
                     shipment = order.meli_shipment
@@ -1159,9 +1271,11 @@ class AccountInvoice(models.Model):
                         ret["items"].append({'quantity':order_item.quantity, 'name': order_item.posting_id.product_id.name})
 
                 else:
-                    _logger.info("No meli_shipping_id found for:"+str(order.meli_shipping_id))
+                    #_logger.info("No meli_shipping_id found for:"+str(order.meli_shipping_id))
+                    pass;
             else:
-                _logger.info("No order found for:"+str(self.origin))
+                #_logger.info("No order found for:"+str(self.origin))
+                pass;
         return ret
 
     @api.model
@@ -1170,7 +1284,7 @@ class AccountInvoice(models.Model):
         if (self.origin):
             order = self.env["sale.order"].search([('name','=',self.origin)])
             if (order.id):
-                _logger.info("Order found in _get_shipment:"+str(order.name))
+                #_logger.info("Order found in _get_shipment:"+str(order.name))
                 #if (order.meli_order_id)
                 if (order.meli_shipment):
                     return order.meli_shipment

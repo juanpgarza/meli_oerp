@@ -106,6 +106,7 @@ class res_company(models.Model):
                             ("CLP","Peso Chileno (CLP)"),
                             ("CRC","Colon Costarricense (CRC)"),
                             ("UYU","Peso Uruguayo (UYU)"),
+                            ("VES","Peso Venezolano (VES)"),
                             ("USD","Dolar Estadounidense (USD)")]
         if (meli):
             response = meli.get("/currencies")
@@ -121,8 +122,13 @@ class res_company(models.Model):
     def _get_ML_sites(self,meli=False):
         # to check api.mercadolibre.com/sites  > MLA
         company = self.env.user.company_id
+
         if not meli:
             meli = self.env['meli.util'].get_new_instance(company)
+
+        country = company and company.country_id
+        country_code = country and country.code
+
         ML_sites = {
             "ARS": { "name": "Argentina", "id": "MLA", "default_currency_id": "ARS" },
             "MXN": { "name": "México", "id": "MLM", "default_currency_id": "MXN" },
@@ -151,8 +157,24 @@ class res_company(models.Model):
 
         #_logger.info(ML_sites)
 
+        if (country_code and country_code=="UY"):
+            return ML_sites["UYU"]["id"]
+
+        if (country_code and country_code=="VE"):
+            return ML_sites["VES"]["id"]
+
+        if (country_code and country_code=="MX"):
+            return ML_sites["MXN"]["id"]
+
+        if (country_code and country_code=="CL"):
+            return ML_sites["CLP"]["id"]
+
+        if (country_code and country_code=="CO"):
+            return ML_sites["COP"]["id"]
+
         if (currency and currency in ML_sites):
             return ML_sites[currency]["id"]
+
         return "MLA"
 
     def get_meli_state( self ):
@@ -170,7 +192,7 @@ class res_company(models.Model):
 
     def cron_meli_process( self ):
 
-        _logger.info('company cron_meli_process() '+str(self))
+        #_logger.info('company cron_meli_process() '+str(self))
 
         company = self.env.user.company_id
 
@@ -178,7 +200,7 @@ class res_company(models.Model):
         if apistate.needlogin_state:
             return True
 
-        _logger.info(str(company.name))
+        #_logger.info(str(company.name))
 
         self.cron_meli_process_get_products( meli=apistate )
 
@@ -200,7 +222,7 @@ class res_company(models.Model):
                 return True
 
         if (company.mercadolibre_cron_post_update_stock):
-            _logger.info("company.mercadolibre_cron_post_update_stock")
+            #_logger.info("company.mercadolibre_cron_post_update_stock")
             self.meli_update_remote_stock(meli=meli)
 
     def cron_meli_process_post_price( self, meli=None ):
@@ -213,7 +235,7 @@ class res_company(models.Model):
                 return True
 
         if (company.mercadolibre_cron_post_update_price):
-            _logger.info("company.mercadolibre_cron_post_update_price")
+            #_logger.info("company.mercadolibre_cron_post_update_price")
             self.meli_update_remote_price(meli=meli)
 
     def cron_meli_process_post_products( self, meli=None ):
@@ -226,7 +248,7 @@ class res_company(models.Model):
                 return True
 
         if (company.mercadolibre_cron_post_update_products or company.mercadolibre_cron_post_new_products):
-            _logger.info("company.mercadolibre_cron_post_update_products")
+            #_logger.info("company.mercadolibre_cron_post_update_products")
             self.meli_update_remote_products(post_new=company.mercadolibre_cron_post_new_products)
 
     def cron_meli_process_get_products( self, meli=None ):
@@ -239,15 +261,15 @@ class res_company(models.Model):
                 return True
 
         if (company.mercadolibre_cron_get_update_products):
-            _logger.info("company.mercadolibre_cron_get_update_products")
+            #_logger.info("company.mercadolibre_cron_get_update_products")
             self.meli_update_local_products()
 
         if (company.mercadolibre_cron_get_new_products):
-            _logger.info("company.mercadolibre_cron_get_new_products")
+            #_logger.info("company.mercadolibre_cron_get_new_products")
             self.product_meli_get_products()
 
     def cron_meli_orders(self):
-        _logger.info('company cron_meli_orders() ')
+        #_logger.info('company cron_meli_orders() ')
 
         company = self.env.user.company_id
 
@@ -256,11 +278,11 @@ class res_company(models.Model):
             return True
 
         if (company.mercadolibre_cron_get_orders):
-            _logger.info("company.mercadolibre_cron_get_orders")
+            #_logger.info("company.mercadolibre_cron_get_orders")
             self.meli_query_orders()
 
     def cron_meli_questions(self):
-        _logger.info('company cron_meli_questions() ')
+        #_logger.info('company cron_meli_questions() ')
 
         company = self.env.user.company_id
 
@@ -269,7 +291,7 @@ class res_company(models.Model):
             return True
 
         if (company.mercadolibre_cron_get_questions):
-            _logger.info("company.mercadolibre_cron_get_questions")
+            #_logger.info("company.mercadolibre_cron_get_questions")
             self.meli_query_get_questions()
 
     mercadolibre_client_id = fields.Char(string='App Id', help='Client ID para ingresar a MercadoLibre',size=128)
@@ -338,6 +360,8 @@ class res_company(models.Model):
                                                 ("gold_pro","Oro Pro")],
                                                 string='Tipo de lista',
                                                 help='Tipo de lista  predeterminada para todos los productos')
+    mercadolibre_channel_mkt = fields.Many2many( "meli.channel.mkt", string="Channels", index=True )
+
     mercadolibre_attributes = fields.Boolean(string='Apply product attributes')
     mercadolibre_exclude_attributes = fields.Many2many('product.attribute.value',
         string='Valores excluidos', help='Seleccionar valores que serán excluidos para las publicaciones de variantes')
@@ -362,7 +386,7 @@ class res_company(models.Model):
                                                 ("paid_confirm", "Pagado>Confirmado"),
                                                 ("paid_delivered", "Pagado>Entregado")],
                                                 default="manual",
-                                                string='Acción al recibir un pedido',
+                                                string='Acción al recibir un pedido (FULL)',
                                                 help='Acción al confirmar una orden o pedido de venta')
     mercadolibre_product_attribute_creation = fields.Selection([ ("manual", "Manual"),
                                                 ("full", "Sincronizado completo (uno a uno, sin importar si se usa o no)"),
@@ -387,6 +411,7 @@ class res_company(models.Model):
 
     mercadolibre_process_offset = fields.Char('Offset for pause all')
     mercadolibre_post_default_code = fields.Boolean(string='Post SKU',help='Post Odoo default_code field for templates or variants to seller_custom_field in ML')
+    mercadolibre_post_barcode = fields.Boolean(string='Post Barcode',help='Post Odoo barcode as GTIN')
     mercadolibre_import_search_sku = fields.Boolean(string='Search SKU',help='Search product by default_code')
 
     mercadolibre_seller_user = fields.Many2one("res.users", string="Vendedor", help="Usuario con el que se registrarán las órdenes automáticamente")
@@ -404,15 +429,177 @@ class res_company(models.Model):
 
     mercadolibre_banner = fields.Many2one("mercadolibre.banner",string="Plantilla Descriptiva")
 
+    mercadolibre_contact_partner = fields.Many2one("res.partner",string="Contacto Predeterminado")
+    mercadolibre_shipping_partner = fields.Many2one("res.partner",string="Contacto de Envio Predeterminado")
+    mercadolibre_invoice_partner = fields.Many2one("res.partner",string="Contacto de Facturación Predeterminado")
+
     #mercadolibre_use_buyer_name = fields.Boolean(string="Use buyer name",default=True)
 
+    #Toma y lista los ids de las publicaciones del sitio de MercadoLibre, filtrados por official_store_id
+    def fetch_list_meli_ids( self, params=None ):
+
+        company = self or self.env.user.company_id
+
+        if not params:
+            params = {}
+
+        config = company
+
+        meli = self.env['meli.util'].get_new_instance( company )
+        if meli.need_login():
+            return meli.redirect_login()
+
+        official_store_id = config.mercadolibre_official_store_id or None
+        seller_id = config.mercadolibre_seller_id
+
+        response = meli.get("/users/"+str(seller_id)+"/items/search",
+                            {'access_token':meli.access_token,
+                            'search_type': 'scan',
+                            'limit': 100, #max paging limit is always 100
+                            **params })
+
+        rjson = response.json()
+        scroll_id = ""
+        results = []
+        ofresults = (rjson and "results" in rjson and rjson["results"]) or []
+        filt_results = self.filter_meli_ids(  ofresults, official_store_id  )
+        results+= filt_results or []
+        condition_last_off = True
+        total = (rjson and "paging" in rjson and "total" in rjson["paging"] and rjson["paging"]["total"]) or 0
+        #_logger.info("fetch_list_meli_ids: params:"+str(params)+" total:"+str(total))
+
+        if (rjson and 'scroll_id' in rjson ):
+            scroll_id = rjson['scroll_id']
+            condition_last_off = False
+
+        while (condition_last_off!=True):
+            search_params = {
+                'access_token': meli.access_token,
+                'search_type': 'scan',
+                'limit': 100,
+                'scroll_id': scroll_id,
+                **params
+            }
+            response = meli.get("/users/"+str(seller_id)+"/items/search", search_params )
+            rjson2 = response.json()
+            if (rjson2 and 'error' in rjson2):
+                _logger.error(rjson2)
+                if rjson2['message']=='invalid_token' or rjson2['message']=='expired_token':
+                    ACCESS_TOKEN = ''
+                    REFRESH_TOKEN = ''
+                    account.write({'access_token': ACCESS_TOKEN, 'refresh_token': REFRESH_TOKEN, 'code': '' } )
+                    condition = True
+                    url_login_meli = meli.auth_url()
+                    return {
+                        "type": "ir.actions.act_url",
+                        "url": url_login_meli,
+                        "target": "new",}
+                condition_last_off = True
+            else:
+                #results+= (rjson2 and "results" in rjson2 and rjson2["results"]) or []
+
+                ofresults = (rjson2 and "results" in rjson2 and rjson2["results"]) or None
+                filt_results = self.filter_meli_ids(  ofresults, official_store_id  )
+                results+= filt_results or []
+                condition_last_off = (total>0 and len(results)>=total)
+
+        return results
+
+    def filter_meli_ids( self, results, store_id ):
+
+        company = self or self.env.user.company_id
+
+        config = company
+
+
+        meli = self.env['meli.util'].get_new_instance( company )
+        if meli.need_login():
+            return meli.redirect_login()
+
+        official_store_id = store_id
+        if not official_store_id:
+            return results
+
+        c = 0
+        n20 = 0
+        rresults = []
+        #_logger.info("results:"+str(results))
+        if not results:
+            return rresults
+
+        ids = ""
+        coma = ""
+        maxc = (results and len(results)) or 0
+        for meli_id in results:
+            c+=1
+            n20+=1
+
+            #read id and official_store_id to check
+            #hacer paquetes de 20 !!!!!! /items?ids=$ITEM_ID1,$ITEM_ID2&attributes=$ATTRIBUTE1,$ATTRIBUTE2,$ATTRIBUTE3
+
+            #armamos el paquete
+            ids+= coma+str(meli_id)
+            coma = ","
+
+            if n20==20 or c==maxc:
+                item_params = {
+                    "ids": str(ids),
+                    "attributes": "id,official_store_id"
+                }
+                #_logger.info("item_params:"+str(item_params))
+                responseItem = meli.get("/items"+str('?ids='+str(ids)+'&attributes='+str('id,official_store_id')), {} )
+                #[ { "code": 200, "body": { "id": "MLM863472529", "official_store_id": 3476 } },
+                #_logger.info("responseItem:"+str(responseItem and responseItem.json()))
+                if responseItem.json():
+                    for rr in responseItem.json():
+                        #_logger.info("rr:"+str(rr))
+                        if ("code" in rr and rr["code"]==200):
+                            if ("body" in rr and rr["body"]):
+                                st_id = "official_store_id" in rr["body"] and rr["body"]["official_store_id"]
+                                ml_id = "id" in rr["body"] and rr["body"]["id"]
+                                if (st_id and official_store_id and str(st_id)==str(official_store_id) ):
+                                    rresults.append(ml_id)
+                ids = ""
+                n20 = 0
+        #_logger.info("rresults:"+str(rresults))
+
+        return rresults
+
+    #list all meli ids in odoo from this account, that are not in parameter filter_ids...
+    def list_meli_ids( self, filter_ids=None ):
+        meli_ids = []
+        company = self
+        product_melis = []
+        if not filter_ids:
+            product_melis = self.env['product.product'].search([
+                                                            ('meli_id','!=',False),
+                                                            ('meli_id','ilike','M%'),
+                                                            '|',
+                                                            ('company_id','=',company.id),
+                                                            ('company_id','=',False)
+                                                        ])
+        else:
+            product_melis = self.env['product.product'].search([
+                                                            ('meli_id','!=',False),
+                                                            ('meli_id','ilike','M%'),
+                                                            ('meli_id','not in',filter_ids),
+                                                            '|',
+                                                            ('company_id','=',company.id),
+                                                            ('company_id','=',False)
+                                                        ])
+
+        if product_melis:
+            meli_ids = product_melis.mapped('meli_id')
+
+        return meli_ids
+
     def	meli_logout(self):
-        _logger.info('company.meli_logout() ')
+        #_logger.info('company.meli_logout() ')
         self.ensure_one()
         company = self.env.user.company_id
         company.write({'mercadolibre_access_token': '', 'mercadolibre_refresh_token': '', 'mercadolibre_code': '' } )
         url_logout_meli = '/web?debug=#'
-        _logger.info( url_logout_meli )
+        #_logger.info( url_logout_meli )
         return {
             "type": "ir.actions.act_url",
             "url": url_logout_meli,
@@ -421,7 +608,7 @@ class res_company(models.Model):
 
 
     def meli_login(self):
-        _logger.info('company.meli_login() ')
+        #_logger.info('company.meli_login() ')
         self.ensure_one()
         company = self.env.user.company_id
 
@@ -431,16 +618,16 @@ class res_company(models.Model):
 
     def meli_query_get_questions(self):
 
-        _logger.info("meli_query_get_questions")
+        #_logger.info("meli_query_get_questions")
         posting_obj = self.env['mercadolibre.posting']
         posting_ids = posting_obj.search(['|',('meli_status','=','active'),('meli_status','=','under_review')])
-        _logger.info(posting_ids)
+        #_logger.info(posting_ids)
         if (posting_ids):
             for posting in posting_ids:
                 posting.posting_query_questions()
 
         posting_ids = posting_obj.search(['&',('meli_status','!=','active'),('meli_status','!=','under_review')])
-        _logger.info(posting_ids)
+        #_logger.info(posting_ids)
         if (posting_ids):
             for posting in posting_ids:
                 posting.posting_query_questions()
@@ -448,28 +635,28 @@ class res_company(models.Model):
 
 
     def meli_query_orders(self, fetch_id_only=False):
-        _logger.info('company.meli_query_orders() fetch_id_only:'+str(fetch_id_only))
+        #_logger.info('company.meli_query_orders() fetch_id_only:'+str(fetch_id_only))
         company = self.env.user.company_id
         orders_obj = self.env['mercadolibre.orders']
         result = orders_obj.orders_query_recent(fetch_id_only=fetch_id_only)
         return result
 
     def meli_import_order(self, order_id):
-        _logger.info('company.meli_import_order() order_id:'+str(order_id))
+        #_logger.info('company.meli_import_order() order_id:'+str(order_id))
         company = self.env.user.company_id
         orders_obj = self.env['mercadolibre.orders']
         result = orders_obj.orders_import_order(order_id=order_id)
         return result
 
     def meli_query_products(self):
-        _logger.info('company.meli_query_products() ')
+        #_logger.info('company.meli_query_products() ')
         company = self.env.user.company_id
         self.product_meli_get_products()
         return {}
 
     def product_meli_get_products( self, context=None ):
         context = context or self.env.context
-        _logger.info('company.product_meli_get_products() context: '+str(context))
+        #_logger.info('company.product_meli_get_products() context: '+str(context))
         company = self.env.user.company_id
         product_obj = self.pool.get('product.product')
         warningobj = self.env['meli.warning']
@@ -511,7 +698,7 @@ class res_company(models.Model):
                                     **post_state_filter
                                     } )
         rjson = response.json()
-        _logger.info( rjson )
+        #_logger.info( rjson )
 
         if 'error' in rjson:
             _logger.error(rjson)
@@ -527,20 +714,20 @@ class res_company(models.Model):
             totalmax = rjson['paging']['total']
             offset = ('offset' in rjson['paging'] and rjson['paging']['offset']) or search_offset
 
-        _logger.info( "totalmax: "+str(totalmax)+" offset:"+str(offset) )
+        #_logger.info( "totalmax: "+str(totalmax)+" offset:"+str(offset) )
 
         scroll_id = False
         if (totalmax>1000 or totalmax>10):
             #USE SCAN METHOD....
-            _logger.info( "use scan method: "+str(totalmax)+" offset: "+str(offset)+" limit: "+str(search_limit) )
-            _logger.info(str(post_state_filter))
+            #_logger.info( "use scan method: "+str(totalmax)+" offset: "+str(offset)+" limit: "+str(search_limit) )
+            #_logger.info(str(post_state_filter))
             response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search",
                                 {'access_token':meli.access_token,
                                 'search_type': 'scan',
                                 'limit': str(search_limit),
                                 **post_state_filter })
             rjson = response.json()
-            _logger.info( rjson )
+            #_logger.info( rjson )
 
             condition_last_off = True
             ioff = 0
@@ -561,8 +748,8 @@ class res_company(models.Model):
 
             while (condition_last_off!=True):
                 ioff = cof
-                _logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
-                _logger.info("len(results)"+str(len(results)))
+                #_logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
+                #_logger.info("len(results)"+str(len(results)))
                 response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search",
                     {
                     'access_token':meli.access_token,
@@ -617,7 +804,7 @@ class res_company(models.Model):
 
             #Append to result all the rest
             while (condition_last_off!=True):
-                _logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
+                #_logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
                 response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search", {
                     'access_token':meli.access_token,
                     'offset': ioff,
@@ -642,9 +829,9 @@ class res_company(models.Model):
                     if (batch_processing_unit and results and len(results)>=batch_processing_unit):
                         break;
 
-        _logger.info( results )
-        _logger.info( "FULL RESULTS TO PROCESS > From offset: "+str(offset) + " batch records: "+ str(len(results)) )
-        _logger.info( "("+str(totalmax)+") total products to check...")
+        #_logger.info( results )
+        #_logger.info( "FULL RESULTS TO PROCESS > From offset: "+str(offset) + " batch records: "+ str(len(results)) )
+        #_logger.info( "("+str(totalmax)+") total products to check...")
         iitem = 0
         icommit = 0
         micom = 5
@@ -656,13 +843,13 @@ class res_company(models.Model):
             Autocommit(self, False)
             try:
                 for item_id in results:
-                    _logger.info(item_id)
+                    #_logger.info(item_id)
                     iitem+= 1
                     icommit+= 1
                     if (icommit>=micom):
                         self._cr.commit()
                         icommit = 0
-                    _logger.info( item_id + "("+str(iitem)+"/"+str(rjson['paging']['total'])+")" )
+                    #_logger.info( item_id + "("+str(iitem)+"/"+str(rjson['paging']['total'])+")" )
                     posting_id = self.env['product.product'].search([('meli_id','=',item_id)])
 
                     response = meli.get("/items/"+item_id, {'access_token':meli.access_token})
@@ -683,9 +870,11 @@ class res_company(models.Model):
                                 posting_id = self.env['product.template'].search([('default_code','=ilike',seller_sku)])
                                 if posting_id:
                                     if (len(posting_id)==1):
-                                        _logger.info("Founded template with default code, dont know how to handle it. seller_sku: "+str(seller_sku)+" template: "+str(posting_id.mapped('name')))
+                                        #_logger.info("Founded template with default code, dont know how to handle it. seller_sku: "+str(seller_sku)+" template: "+str(posting_id.mapped('name')))
+                                        pass;
                                     if (len(posting_id)>1):
                                         _logger.error("Founded templates more than 2 default code: seller_sku: "+str(seller_sku)+" template: "+str(posting_id.mapped('name')))
+                                        pass;
                             else:
                                 if (len(posting_id)==1):
                                     posting_id.meli_id = item_id
@@ -721,9 +910,9 @@ class res_company(models.Model):
                     if (posting_id or force_dont_create):
                         if posting_id:
                             if (len(posting_id)==1):
-                                _logger.info( "Item already in database: " + str(posting_id[0]) )
+                                #_logger.info( "Item already in database: " + str(posting_id[0]) )
                                 if force_meli_pub:
-                                    _logger.info( "Item meli_pub set" )
+                                    #_logger.info( "Item meli_pub set" )
                                     posting_id.meli_pub = True
                                     posting_id.product_tmpl_id.meli_pub = True
                                 if force_meli_website_published:
@@ -762,7 +951,7 @@ class res_company(models.Model):
                                             'meli_status': rjson3['status'] ,
                                             'status': 'missing'
                                             })
-                            _logger.info( "Item not in database, no sync founded for meli_id: "+str(item_id) + " seller_sku: " +str(seller_sku) )
+                            #_logger.info( "Item not in database, no sync founded for meli_id: "+str(item_id) + " seller_sku: " +str(seller_sku) )
                         self._cr.commit()
                     #elif (not company.mercadolibre_import_search_sku):
                     else:
@@ -779,25 +968,27 @@ class res_company(models.Model):
                             productcreated = self.env['product.product'].create((prod_fields))
                             if (productcreated):
                                 if force_meli_pub:
-                                    _logger.info( "Item meli_pub set" )
+                                    #_logger.info( "Item meli_pub set" )
                                     productcreated.meli_pub = True
                                     if (productcreated.product_tmpl_id):
                                         productcreated.product_tmpl_id.meli_pub = True
                                 if force_meli_website_published:
                                     productcreated.website_published = force_meli_website_published
-                                _logger.info( "product created: " + str(productcreated) + " >> meli_id:" + str(rjson3['id']) + " >> " + str( rjson3['title'].encode("utf-8")) )
+                                #_logger.info( "product created: " + str(productcreated) + " >> meli_id:" + str(rjson3['id']) + " >> " + str( rjson3['title'].encode("utf-8")) )
                                 #pdb.set_trace()
-                                _logger.info(productcreated)
+                                #_logger.info(productcreated)
                                 productcreated.product_meli_get_product()
                                 self._cr.commit()
                             else:
-                                _logger.info( "product couldnt be created")
+                                _logger.error( "product couldnt be created")
+                                pass;
                         else:
-                            _logger.info( "product error: " + str(rjson3) )
+                            _logger.error( "product error: " + str(rjson3) )
+                            pass;
 
-                _logger.info("Synced: "+str(synced))
-                _logger.info("Duplicates: "+str(duplicates))
-                _logger.info("Missing: "+str(missing))
+                #_logger.info("Synced: "+str(synced))
+                #_logger.info("Duplicates: "+str(duplicates))
+                #_logger.info("Missing: "+str(missing))
 
             except Exception as e:
                 _logger.info("product_meli_get_products Exception!")
@@ -806,6 +997,7 @@ class res_company(models.Model):
                 _logger.info("Duplicates: "+str(duplicates))
                 _logger.info("Missing: "+str(missing))
                 self._cr.rollback()
+                pass;
 
             html_report = "<h2>Reporte Importación</h2>"
 
@@ -850,23 +1042,23 @@ class res_company(models.Model):
 
 
     def meli_update_local_products(self):
-        _logger.info('company.meli_update_local_products() ')
+        #_logger.info('company.meli_update_local_products() ')
         self.product_meli_update_local_products()
         return {}
 
 
     def meli_post_new_remote_products(self):
-        _logger.info('company.meli_post_new_remote_products() ')
+        #_logger.info('company.meli_post_new_remote_products() ')
         self.product_meli_update_remote_products(post_new=True)
         return {}
 
     def meli_update_remote_products(self,post_new=False):
-        _logger.info('company.meli_update_remote_products() ')
+        #_logger.info('company.meli_update_remote_products() ')
         self.product_meli_update_remote_products(post_new=post_new)
         return {}
 
     def product_meli_update_local_products( self ):
-        _logger.info('company.product_meli_update_local_products() ')
+        #_logger.info('company.product_meli_update_local_products() ')
         company = self.env.user.company_id
         product_obj = self.env['product.product']
 
@@ -882,7 +1074,7 @@ class res_company(models.Model):
             try:
                 for obj in product_ids:
                     cn = cn + 1
-                    _logger.info( "Product to update: [" + str(obj.id) + "] " + str(cn)+"/"+str(ct))
+                    #_logger.info( "Product to update: [" + str(obj.id) + "] " + str(cn)+"/"+str(ct))
                     try:
                         obj.product_meli_get_product()
                         self._cr.commit()
@@ -895,11 +1087,12 @@ class res_company(models.Model):
                 _logger.info("product_meli_update_products > Exception error.")
                 _logger.error(e, exc_info=True)
                 self._cr.rollback()
+                pass;
 
         return {}
 
     def product_meli_update_remote_products( self, post_new = False ):
-        _logger.info('company.product_meli_update_remote_products() ')
+        #_logger.info('company.product_meli_update_remote_products() ')
         company = self.env.user.company_id
         product_obj = self.env['product.product']
 
@@ -909,7 +1102,7 @@ class res_company(models.Model):
         #product_ids = self.env['product.product'].search([('meli_pub','=',True),('meli_id','!=',False)])
         product_ids = self.env['product.template'].search([('meli_pub','=',True),
                                                           '|',('company_id','=',False),('company_id','=',company.id)])
-        _logger.info("product_ids to update or create:" + str(product_ids))
+        #_logger.info("product_ids to update or create:" + str(product_ids))
 
         ret_messages = []
         if product_ids:
@@ -919,16 +1112,16 @@ class res_company(models.Model):
                     updating = post_update and obj.meli_publications and len(obj.meli_publications)
                     #(obj.meli_variants_status=='active')
                     creating = post_new and ( not obj.meli_publications or ( obj.meli_publications and obj.meli_publications == '') )
-                    _logger.info(obj.name)
-                    _logger.info(obj.meli_publications)
-                    _logger.info(obj.meli_variants_status)
+                    #_logger.info(obj.name)
+                    #_logger.info(obj.meli_publications)
+                    #_logger.info(obj.meli_variants_status)
                     if ( updating or creating):
                         res = {}
                         if (updating):
-                            _logger.info( "Product remote update: " + str(obj.id)  )
+                            #_logger.info( "Product remote update: " + str(obj.id)  )
                             res = obj.product_template_post()
                         if (creating):
-                            _logger.info( "Product remote to create: " + str(obj.id)  )
+                            #_logger.info( "Product remote to create: " + str(obj.id)  )
                             res = obj.with_context({'force_meli_pub': True }).product_template_post()
 
                         #we have a message
@@ -940,6 +1133,7 @@ class res_company(models.Model):
                 except Exception as e:
                     _logger.info("product_meli_update_remote_products > Exception founded!")
                     _logger.info(e, exc_info=True)
+                    pass;
 
         self.meli_send_report( ret_messages )
 
@@ -993,8 +1187,8 @@ class res_company(models.Model):
                 ], order='meli_stock_update asc')
             product_ids = product_ids_null + product_ids_not_null
             topcommits = 40
-            _logger.info("product_ids stock to update:" + str(product_ids))
-            _logger.info("updating stock #" + str(len(product_ids)) + " on " + str(company.name)+ " cron top:"+str(topcommits))
+            #_logger.info("product_ids stock to update:" + str(product_ids))
+            #_logger.info("updating stock #" + str(len(product_ids)) + " on " + str(company.name)+ " cron top:"+str(topcommits))
             icommit = 0
             icount = 0
             maxcommits = len(product_ids)
@@ -1018,7 +1212,7 @@ class res_company(models.Model):
                         icommit+= 1
                         icount+= 1
                         try:
-                            _logger.info( "Update Stock: #" + str(icount) +'/'+str(maxcommits)+ ' meli_id:'+str(obj.meli_id)  )
+                            #_logger.info( "Update Stock: #" + str(icount) +'/'+str(maxcommits)+ ' meli_id:'+str(obj.meli_id)  )
                             resjson = obj.product_post_stock(meli=meli)
                             logs+= str(obj.default_code)+" "+str(obj.meli_id)+": "+str(obj.meli_available_quantity)+"\n"
 
@@ -1038,7 +1232,7 @@ class res_company(models.Model):
                                 noti.processing_errors = errors
                                 noti.processing_logs = logs
                                 noti.resource = "meli_update_remote_stock #"+str(icount) +'/'+str(maxcommits)
-                                _logger.info("meli_update_remote_stock commiting")
+                                #_logger.info("meli_update_remote_stock commiting")
                                 icommit=0
                                 if auto_commit:
                                     self.env.cr.commit()
@@ -1051,6 +1245,7 @@ class res_company(models.Model):
                             errors+= str(obj.default_code)+" "+str(obj.meli_id)+" >> "+str(e)+"\n"
                             if auto_commit:
                                 self.env.cr.rollback()
+                            pass;
 
                 noti.resource = "meli_update_remote_stock #"+str(icount) +'/'+str(maxcommits)
                 noti.stop_internal_notification(errors=errors,logs=logs)
@@ -1063,6 +1258,7 @@ class res_company(models.Model):
                 noti.stop_internal_notification( errors=errors , logs=logs )
                 if auto_commit:
                     self.env.cr.commit()
+                pass;
 
         return {}
 
@@ -1088,8 +1284,8 @@ class res_company(models.Model):
                 ], order='meli_price_update asc')
             product_ids = product_ids_null + product_ids_not_null
 
-            _logger.info("product_ids price to update:" + str(product_ids))
-            _logger.info("updating price #" + str(len(product_ids)) + " on " + str(company.name))
+            #_logger.info("product_ids price to update:" + str(product_ids))
+            #_logger.info("updating price #" + str(len(product_ids)) + " on " + str(company.name))
 
             icommit = 0
             icount = 0
@@ -1120,7 +1316,7 @@ class res_company(models.Model):
                         #_logger.info( "Product remote to update: " + str(obj.id)  )
                         if (obj.meli_id and icount<=topcommits):
                             try:
-                                _logger.info( "Update Price: #" + str(icount) +'/'+str(maxcommits)+ ' meli_id:'+str(obj.meli_id)  )
+                                #_logger.info( "Update Price: #" + str(icount) +'/'+str(maxcommits)+ ' meli_id:'+str(obj.meli_id)  )
                                 resjson = obj.product_post_price(meli=meli)
                                 logs+= str(obj.default_code)+" "+str(obj.meli_id)+": "+str(obj.meli_price)+"\n"
                                 if "error" in resjson:
@@ -1130,7 +1326,7 @@ class res_company(models.Model):
                                     noti.processing_errors = errors
                                     noti.processing_logs = logs
                                     noti.resource = "meli_update_remote_price #"+str(icount) +'/'+str(maxcommits)
-                                    _logger.info("meli_update_remote_price commiting")
+                                    #_logger.info("meli_update_remote_price commiting")
                                     icommit=0
                                     if auto_commit:
                                         self.env.cr.commit()
@@ -1143,6 +1339,7 @@ class res_company(models.Model):
                                 errors+= str(obj.default_code)+" "+str(obj.meli_id)+" >> "+str(e)+"\n"
                                 if auto_commit:
                                     self.env.cr.rollback()
+                                pass;
 
                     noti.resource = "meli_update_remote_price #"+str(icount) +'/'+str(maxcommits)
                     noti.stop_internal_notification(errors=errors,logs=logs)
@@ -1155,12 +1352,13 @@ class res_company(models.Model):
                     noti.stop_internal_notification( errors=errors , logs=logs )
                     if auto_commit:
                         self.env.cr.commit()
+                    pass;
 
         return {}
 
     def meli_notifications(self, data=False):
         company = self
-        _logger.info("meli_notifications")
+        #_logger.info("meli_notifications")
         notifications = self.env['mercadolibre.notification']
         if (self.mercadolibre_process_notifications):
             return notifications.fetch_lasts( data, company )
@@ -1172,7 +1370,7 @@ class res_company(models.Model):
         return False
 
     def meli_pause_all( self ):
-        _logger.info('company.meli_pause_all() ')
+        #_logger.info('company.meli_pause_all() ')
         company = self.env.user.company_id
         product_obj = self.pool.get('product.product')
 
@@ -1186,7 +1384,7 @@ class res_company(models.Model):
             offset = company.mercadolibre_process_offset
         response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search", {'status': status,'access_token':meli.access_token,'offset': offset })
         rjson = response.json()
-        _logger.info( rjson )
+        #_logger.info( rjson )
 
         if 'error' in rjson:
             if rjson['message']=='invalid_token' or rjson['message']=='expired_token':
@@ -1214,7 +1412,7 @@ class res_company(models.Model):
                                 'offset': offset,
                                 'limit': '100' })
             rjson = response.json()
-            _logger.info( rjson )
+            #_logger.info( rjson )
             condition_last_off = True
             if ('scroll_id' in rjson):
                 scroll_id = rjson['scroll_id']
@@ -1222,7 +1420,7 @@ class res_company(models.Model):
                 results = rjson['results']
                 condition_last_off = False
             while (condition_last_off!=True):
-                _logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
+                #_logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
                 response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search",
                     {
                     'access_token':meli.access_token,
@@ -1257,7 +1455,7 @@ class res_company(models.Model):
             ioff = rjson['paging']['limit']
             condition_last_off = False
             while (condition_last_off!=True):
-                _logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
+                #_logger.info( "Prefetch products ("+str(ioff)+"/"+str(rjson['paging']['total'])+")" )
                 response = meli.get("/users/"+company.mercadolibre_seller_id+"/items/search", {'access_token':meli.access_token,'offset': ioff })
                 rjson2 = response.json()
                 if 'error' in rjson2:
@@ -1275,9 +1473,9 @@ class res_company(models.Model):
                     ioff+= rjson['paging']['limit']
                     condition_last_off = ( ioff>=totalmax)
 
-        _logger.info( results )
-        _logger.info( "FULL RESULTS: " + str(len(results)) )
-        _logger.info( "("+str(rjson['paging']['total'])+") products to check...")
+        #_logger.info( results )
+        #_logger.info( "FULL RESULTS: " + str(len(results)) )
+        #_logger.info( "("+str(rjson['paging']['total'])+") products to check...")
         iitem = 0
         icommit = 0
         micom = 5
@@ -1285,17 +1483,18 @@ class res_company(models.Model):
             Autocommit(self, False)
             try:
                 for item_id in results:
-                    _logger.info(item_id)
+                    #_logger.info(item_id)
                     iitem+= 1
                     icommit+= 1
                     if (icommit>=micom):
                         #self._cr.commit()
                         icommit = 0
-                    _logger.info( item_id + "("+str(iitem)+"/"+str(rjson['paging']['total'])+")" )
+                    #_logger.info( item_id + "("+str(iitem)+"/"+str(rjson['paging']['total'])+")" )
                     posting_id = self.env['product.product'].search([('meli_id','=',item_id),
                                                                       '|',('company_id','=',False),('company_id','=',company.id)])
                     if (posting_id):
-                        _logger.info( "meli_pause_all Item already in database: " + str(posting_id[0]) )
+                        #_logger.info( "meli_pause_all Item already in database: " + str(posting_id[0]) )
+                        pass;
                         #response = meli.get("/items/"+item_id, {'access_token':meli.access_token})
                         #rjson3 = response.json()
                     else:
@@ -1305,5 +1504,6 @@ class res_company(models.Model):
             except Exception as e:
                 _logger.info("meli_pause_all Exception!")
                 _logger.info(e, exc_info=True)
+                pass;
                 #self._cr.rollback()
         return {}

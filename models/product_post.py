@@ -52,6 +52,10 @@ class product_template_post(models.TransientModel):
     posting_date = fields.Date('Fecha del posting')
     #'company_id': fields.many2one('res.company',string='Company'),
     #'mercadolibre_state': fields.related( 'res.company', 'mercadolibre_state', string="State" )
+
+    force_meli_variant = fields.Boolean(string="Publicar como variante",
+                                        help="Marca la publicación para ser publicada como variante, intentara especificar unicamente los atributos marcados en Odoo que crean variantes, aunque exista una sola combinacion.",
+                                        default=False)
     post_stock = fields.Boolean(string="Actualizar Stock",help="No actualiza el producto completo, solo el stock",default=False)
     post_price = fields.Boolean(string="Actualizar Precio",help="No actualiza el producto completo, solo el precio",default=False)
     action_pause = fields.Boolean(string="Pausar producto",help="No actualiza el producto completo, sólo pausa el producto",default=False)
@@ -79,6 +83,7 @@ class product_template_post(models.TransientModel):
         custom_context = {
             'force_meli_pub': self.force_meli_pub,
             'force_meli_active': self.force_meli_active,
+            'force_meli_variant': self.force_meli_variant,
             'post_stock': self.post_stock,
             'post_price': self.post_price,
             'action_pause': self.action_pause
@@ -89,6 +94,10 @@ class product_template_post(models.TransientModel):
             if (product):
                 if (self.force_meli_pub and not product.meli_pub):
                     product.meli_pub = True
+
+                if (self.force_meli_variant):
+                    product.meli_pub_as_variant = True
+
                 if (product.meli_pub):
 
                     if self.post_stock:
@@ -153,7 +162,7 @@ class product_template_update(models.TransientModel):
                     for variant in product.product_variant_ids:
                         variant.meli_pub = True
                 if (product.meli_pub):
-                        res = product.product_template_update(meli_id=meli_id)
+                    res = product.product_template_update(meli_id=meli_id)
 
             if res and 'name' in res:
                 return res
@@ -322,6 +331,7 @@ class product_template_import(models.TransientModel):
     batch_processing = fields.Boolean(string="Batch Processing Active",default=False)
     batch_actives_to_sync = fields.Boolean(string="Process Actives To Sync",default=False)
     batch_paused_to_sync = fields.Boolean(string="Process Paused To Sync",default=False)
+    batch_left_to_sync = fields.Boolean(string="Process All Lefts To Sync",default=False)
 
     report_import = fields.Many2one( "ir.attachment",string="Reporte Importación")
 
@@ -347,65 +357,48 @@ class product_template_import(models.TransientModel):
         post_state_filter = {}
 
         meli_id = self.meli_id
+        odoo_meli_ids = company.list_meli_ids()
+        _logger.info("odoo_meli_ids: ###" + str(len(odoo_meli_ids)) )
 
+        ### ACTIVE
         post_state_filter = { 'status': 'active' }
         if meli_id:
             post_state_filter.update( { 'meli_id': meli_id } )
-        response = meli.get("/users/"+config.mercadolibre_seller_id+"/items/search", {'access_token':meli.access_token,
-                                                                                        'offset': 0,
-                                                                                        **post_state_filter } )
-        rjson = response.json()
-        _logger.info( rjson )
-        if 'error' in rjson:
-            _logger.error(rjson)
-        if 'results' in rjson:
-            results = rjson['results']
-        totalmax = 0
-        if 'paging' in rjson:
-            totalmax = rjson['paging']['total']
-        _logger.info( "totalmax: "+str(totalmax) )
-        actives_to_sync = str(totalmax)
+
+        fetched_meli_ids_active = company.fetch_list_meli_ids( params=post_state_filter )
+
         actives_total = len(fetched_meli_ids_active)
 
+        actives_to_sync = []
+        for mli in fetched_meli_ids_active:
+            if mli not in odoo_meli_ids:
+                actives_to_sync.append(mli)
+
+        ### PAUSED
         post_state_filter = { 'status': 'paused' }
         if meli_id:
             post_state_filter.update( { 'meli_id': meli_id } )
-        response = meli.get("/users/"+config.mercadolibre_seller_id+"/items/search", {'access_token':meli.access_token,
-                                                                                        'offset': 0,
-                                                                                        **post_state_filter } )
-        rjson = response.json()
-        _logger.info( rjson )
-        if 'error' in rjson:
-            _logger.error(rjson)
-        if 'results' in rjson:
-            results = rjson['results']
-        totalmax = 0
-        if 'paging' in rjson:
-            totalmax = rjson['paging']['total']
-        _logger.info( "totalmax: "+str(totalmax) )
-        paused_to_sync = str(totalmax)
 
+        fetched_meli_ids_paused = company.fetch_list_meli_ids( params=post_state_filter )
+        paused_total = len(fetched_meli_ids_paused)
 
+        paused_to_sync = []
+        for mli in fetched_meli_ids_paused:
+            if mli not in odoo_meli_ids:
+                paused_to_sync.append(mli)
 
+        ### CLOSED
         post_state_filter = { 'status': 'closed' }
         if meli_id:
             post_state_filter.update( { 'meli_id': meli_id } )
-        response = meli.get("/users/"+config.mercadolibre_seller_id+"/items/search", {'access_token':meli.access_token,
-                                                                                        'offset': 0,
-                                                                                        **post_state_filter } )
 
-        rjson = response.json()
-        _logger.info( rjson )
-        if 'error' in rjson:
-            _logger.error(rjson)
-        if 'results' in rjson:
-            results = rjson['results']
-        totalmax = 0
-        if 'paging' in rjson:
-            totalmax = rjson['paging']['total']
-        _logger.info( "totalmax: "+str(totalmax) )
-        closed_to_sync = str(totalmax)
+        fetched_meli_ids_closed = company.fetch_list_meli_ids( params=post_state_filter )
+        closed_total = len(fetched_meli_ids_closed)
 
+        closed_to_sync = []
+        for mli in fetched_meli_ids_closed:
+            if mli not in odoo_meli_ids:
+                closed_to_sync.append(mli)
 
         #check last import Status
         attachments = self.env["ir.attachment"].search([('res_id','=',self.id)], order='id desc')
@@ -510,16 +503,18 @@ class product_template_import(models.TransientModel):
             csv_report = ""
 
             sep = ""
-            for field in full_report[0]:
-                csv_report_header+= sep+str(field)
-                sep = ";"
-
-            for sync in full_report:
-                sep = ""
-                for field in sync:
-                    csv_report+= sep+'"'+str(sync[field])+'"'
+            full_report = full_report or []
+            if full_report:
+                for field in full_report[0]:
+                    csv_report_header+= sep+str(field)
                     sep = ";"
-                csv_report+= "\n"
+
+                for sync in full_report:
+                    sep = ""
+                    for field in sync:
+                        csv_report+= sep+'"'+str(sync[field])+'"'
+                        sep = ";"
+                    csv_report+= "\n"
 
             csv_report_attachment_last = self.report_import or self.env["ir.attachment"].search([('res_id','=',self.id)], order='id desc', limit=1 )
             if (csv_report_attachment_last):

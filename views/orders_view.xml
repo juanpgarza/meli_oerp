@@ -52,6 +52,7 @@
                     <field name="shipping_id" invisible="0"/>
                     <field name="order_product"/>
                     <field name="order_product_sku"/>
+                    <field name="order_product_meli_id"/>
                     <field name="status"/>
                     <field name="shipment_status" invisible="0"/>
                     <field name="shipment_substatus" invisible="0"/>
@@ -77,13 +78,28 @@
                 <data>
                     <notebook>
                         <page string="MercadoLibre" attrs="{'invisible':[('meli_order_id', '=', False)]}">
+                            <button name='meli_oerp_update' type="object"
+                            string="Actualizar"
+                            attrs="{'invisible':[('meli_order_id','=',False)]}"
+                            class="oe_stat_button"
+                            icon="fa-refresh"/>
+                            <button name='meli_oerp_print' type="object"
+                              string="Imprimir guia"
+                              attrs="{'invisible':[('meli_shipment','=',False)]}"
+                              class="oe_stat_button"
+                              icon="fa-print"/>
                             <field name="meli_orders" invisible="0"/>
                             <group>
+                              <field name="meli_order"/>
+                              <field name="meli_buyer"/>
+                              <field name="meli_buyer_name"/>
                               <field name="meli_update_forbidden" string="No actualizar desde ML"/>
                               <field name="meli_order_id" invisible="0"/>
                               <field name="meli_status" invisible="0"/>
                               <field name="meli_status_brief" invisible="0"/>
                               <field name="meli_shipment" invisible="0"/>
+                              <field name="meli_shipment_pdf_file" invisible="0"/>
+                              <field name="meli_shipment_pdf_filename" invisible="0"/>
                               <field name="meli_shipment_logistic_type" invisible="0"/>
                               <field name="meli_status_detail" invisible="0"/>
                               <field name="meli_total_amount" invisible="0"/>
@@ -256,7 +272,11 @@
             <field name="model">mercadolibre.orders</field>
             <field name="arch" type="xml">
     	         <search string="Search MercadoLibre Orders Information">
-                 <field name="name" string="Order" filter_domain="['|', '|', '|', '|', ('name', 'ilike', self), ('order_id', 'ilike', self), ('pack_id', 'ilike', self), ('order_product_sku', 'ilike', self), ('buyer', 'ilike', self)]"/>
+                 <field name="name" string="Order" filter_domain="['|', '|', '|', '|','|', '|', ('name', 'ilike', self), ('order_id', 'ilike', self), ('pack_id', 'ilike', self), ('order_product_sku', 'ilike', self), ('order_product_meli_id', 'ilike', self), ('order_product_meli_variation_id', 'ilike', self), ('buyer', 'ilike', self)]"/>
+                 <field name="order_id" string="Order ID"/>
+                 <field name="order_product_sku" string="Product SKU"/>
+                 <field name="order_product_meli_id" string="Product Meli Id"/>
+                 <field name="order_product_meli_variation_id" string="Product Meli Var Id"/>
                  <field name="order_id" string="Order ID"/>
                  <field name="pack_id" string="Pack ID"/>
                  <field name="status" string="Status"/>
@@ -318,6 +338,9 @@
               <field name="type">form</field>
               <field name="arch" type="xml">
                 <form string="Cancel Order" version="7.0">
+                    <group>
+                      <field name="cancel_blocked"/>
+                    </group>
                     <footer>
                         <button name="cancel_order" string="Cancel Orders"  type="object" class="oe_highlight"  />
                         <button string="Cancel" class="oe_link" special="cancel" />
@@ -376,7 +399,7 @@
         </record>
         -->
 
-        <menuitem id="menu_meli" name="MercadoLibre" parent="sale.sale_menu_root" sequence="9"/>
+        <menuitem id="menu_meli" name="MercadoLibre" parent="sale.sale_menu_root" sequence="16"/>
 
         <menuitem id="menu_meli_orders"
             action="action_meli_orders_tree"

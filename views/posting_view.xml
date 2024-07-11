@@ -13,6 +13,7 @@
                     <field name="product_id"/>
                     <field name="meli_seller_custom_field"/>
                     <field name="meli_id"/>
+                    <field name="meli_variation_id"/>
                     <field name="meli_permalink" widget="url"/>
                     <field name="meli_status"/>
                     <field name="meli_price"/>
@@ -32,6 +33,8 @@
                     <field name="name"/>
                     <field name="posting_date"/>
                     <field name="meli_id"/>
+                    <field name="meli_variation_id"/>
+
                     <field name="meli_seller_custom_field"/>
                     <field name="product_id"/>
                     <field name="meli_permalink" widget="url"/>
@@ -90,7 +93,7 @@
     </record>
 
 
-    <menuitem id="menu_meli" name="MercadoLibre" parent="sale.sale_menu_root" sequence="9"/>
+    <menuitem id="menu_meli" name="MercadoLibre" parent="sale.sale_menu_root" sequence="16"/>
 
     <menuitem id="menu_meli_postings"
         action="action_meli_postings_tree"
